@@ -1,0 +1,1 @@
+/tests folder outside of src to seperate the two and make it easier to run tests. 
