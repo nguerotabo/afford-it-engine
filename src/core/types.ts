@@ -12,7 +12,7 @@ export type AffordabilityInput = {
     savingsCommitmentFrequency: frequency
 }
 
-export type frequency = "weekly" | "monthly" | "yearly";
+export type frequency = "weekly" | "monthly" | "yearly" | "biweekly";
 
 export type Decision = "yes" | "no" | "wait";
 
@@ -22,7 +22,7 @@ export type AffordabilityOutput = {
     suggestedPurchaseDate: Date;
     safeToSpend: number;
     paychequesNeeded: number;
-    cashImpact: number;
+    totalImpact: number;
     paychequeImpact: number;
     affordabilityScore: number; // figure out a way to make this happen.
     remainingAfter: number; 
