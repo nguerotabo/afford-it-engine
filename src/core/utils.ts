@@ -1,4 +1,4 @@
-import type { frequency } from "./types.js";
+import type { frequency } from "./types";
 
 // Helper Function: Converts any number to match the user's paycheque cycle
 

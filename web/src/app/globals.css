@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f6f2;
+  --foreground: #14201a;
+  --muted: #4a5c52;
+  --surface: rgba(255, 255, 255, 0.72);
+  --line: rgba(20, 32, 26, 0.12);
+  --accent: #0f6e56;
+  --accent-soft: #d8f3e7;
+  --yes: #0f6e56;
+  --wait: #9a6700;
+  --no: #a32d2d;
+  --glow: #b9e4cf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-yes: var(--yes);
+  --color-wait: var(--wait);
+  --color-no: var(--no);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.55s ease-out both;
+}
+
+.animate-rise-delay {
+  animation: rise-in 0.65s ease-out 0.08s both;
+}
+
+.bg-atmosphere {
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, var(--glow), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, #e8f0ff, transparent 50%),
+    linear-gradient(180deg, #f7faf6 0%, #eef3ec 45%, #e7eee8 100%);
+}
+
+.decision-yes {
+  color: var(--yes);
+}
+
+.decision-wait {
+  color: var(--wait);
+}
+
+.decision-no {
+  color: var(--no);
+}

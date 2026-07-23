@@ -1,9 +1,9 @@
-import type { AffordabilityInput, AffordabilityOutput, Decision } from "./types.js";
+import type { AffordabilityInput, AffordabilityOutput, Decision } from "./types";
 import {
   normalizeToPaycheque,
   calculatePaychequesNeeded,
   calculateSuggestedPurchaseDate,
-} from "./utils.js";
+} from "./utils";
 
 export function evaluateAffordability(input: AffordabilityInput): AffordabilityOutput {
     const {

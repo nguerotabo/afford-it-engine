@@ -5,7 +5,9 @@
   "main": "index.tsx",
   "scripts": {
     "test": "vitest",
-    "dev": "tsx src/index.ts"
+    "dev": "npm run dev --prefix web",
+    "dev:engine": "tsx src/core/playground.ts",
+    "build": "npm run build --prefix web"
   },
   "keywords": [],
   "author": "",

@@ -1,5 +1,5 @@
-import type {AffordabilityInput, AffordabilityOutput} from "./types.js";
-import { evaluateAffordability } from "./engine.js";
+import type { AffordabilityInput } from "./types";
+import { evaluateAffordability } from "./engine";
 
 const input: AffordabilityInput = {
     paycheque: 50000,
@@ -9,7 +9,7 @@ const input: AffordabilityInput = {
     currentSavings: 500000,
     minimumBuffer: 200000,
     purchasePrice: 500000,
-    desiredPurchaseDate: new Date("2026-10-15"),
+    desiredPurchaseDate: new Date("2026-10-30"),
     purchaseCategory: "wants",
     savingsCommitment: 25000,
     savingsCommitmentFrequency: "weekly",
