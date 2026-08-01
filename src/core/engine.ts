@@ -4,9 +4,10 @@ import {
   calculatePaychequesNeeded,
   calculateSuggestedPurchaseDate,
 } from "./utils";
+import { convertToCents, convertToDollars } from "./money";
 
 export function evaluateAffordability(input: AffordabilityInput): AffordabilityOutput {
-    const {
+    let {
       paycheque,
       paychequeFrequency,
       expenses,
@@ -18,15 +19,24 @@ export function evaluateAffordability(input: AffordabilityInput): AffordabilityO
       currentSavings,
       minimumBuffer,
     } = input;
+
+    //Convert everything to cents
+    purchasePrice = convertToCents(purchasePrice);
+    expenses = convertToCents(expenses);
+    savingsCommitment= convertToCents(savingsCommitment);
+    currentSavings = convertToCents(currentSavings);
+    minimumBuffer = convertToCents(minimumBuffer);
+    paycheque = convertToCents(paycheque);
+
   
     // Normalizing expenses + savings to user's chosen paycheque cycle
-    const normalizedExpenses = normalizeToPaycheque(expenses, expensesFrequency, paychequeFrequency);
-    const normalizedSavings = normalizeToPaycheque(savingsCommitment, savingsCommitmentFrequency, paychequeFrequency);
+    const normalizedExpenses = Math.round(normalizeToPaycheque(expenses, expensesFrequency, paychequeFrequency));
+    const normalizedSavings = Math.round(normalizeToPaycheque(savingsCommitment, savingsCommitmentFrequency, paychequeFrequency));
   
     // Core calculations
-    const freeCashFlowPerPaycheque = paycheque - normalizedExpenses - normalizedSavings;
-    const safeToSpend = currentSavings - minimumBuffer;
-    const remainingAfter = safeToSpend + freeCashFlowPerPaycheque - purchasePrice; // >= 0 => affordable now, buffer intact
+    let freeCashFlowPerPaycheque = paycheque - normalizedExpenses - normalizedSavings;
+    let safeToSpend = currentSavings - minimumBuffer;
+    let remainingAfter = safeToSpend + freeCashFlowPerPaycheque - purchasePrice; // >= 0 => affordable now, buffer intact
 
     // Derived metrics
     const paychequeImpact = paycheque > 0 ? purchasePrice / paycheque : Infinity;
@@ -66,6 +76,11 @@ export function evaluateAffordability(input: AffordabilityInput): AffordabilityO
       finalDecision = "no";
       suggestedPurchaseDate = earliestAffordableDate;
     }
+
+    //Convert everything back to dollars
+    safeToSpend = convertToDollars(safeToSpend);
+    remainingAfter = convertToDollars(remainingAfter);
+    freeCashFlowPerPaycheque = convertToDollars(freeCashFlowPerPaycheque);
 
     return {
       decision: finalDecision,
