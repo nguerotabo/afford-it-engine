@@ -22,7 +22,7 @@ const money = (n: number) =>
   n.toLocaleString(undefined, {
     style: "currency",
     currency: "CAD",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 3,
   });
 
 const pct = (ratio: number | null) =>
