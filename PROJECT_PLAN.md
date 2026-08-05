@@ -2,7 +2,7 @@
 
 **Status:** Active reference. Supersedes the old blueprint where they conflict.  
 **Target:** SWE internship interviews (Dec 2025 / Jan 2026) — Round 2 project presentation + Round 1 OOP prep.  
-**Last updated:** 2026-07-21
+**Last updated:** 2026-08-01
 
 ---
 
@@ -84,7 +84,8 @@ This is the main presentation. Everything else supports it.
 
 ### 5.1 Current state (honest)
 - ~one function: normalize → math → yes/wait/no
-- Float money; unused `purchaseCategory`; fake score; placeholder AI reason
+- **Cents (Contract B):** dollars in → integer cents inside engine → dollars out; round after frequency normalize
+- Unused `purchaseCategory`; fake score; placeholder AI reason
 - Stub tests; no `risky` / risk factors despite earlier notes
 
 ### 5.2 Target architecture
@@ -186,15 +187,15 @@ Interview window: **Dec 2025 / Jan 2026**. Work engine-first.
 
 | Phase | What | Approx | Done when |
 |---|---|---|---|
-| **A** | Integer cents money type; migrate engine types | 3–5 days | No float math in core; playground works |
-| **B** | Extract metrics; OOP `Rule`s + `DecisionEngine`; `risky` + `riskFactors`; use category | 1–2 weeks | Can whiteboard “add a rule without touching others” |
+| **A** | Integer cents in engine math | 3–5 days | No float money math in core; playground works |
+| **B** | Metrics + OOP rules + `risky` | 1–2 weeks | Can whiteboard “add a rule without touching others” |
 | **C** | What-if before/after snapshot | ~1 week | API/demo shows before vs after |
-| **D** | Exhaustive Vitest + edge cases (start in A, finish here) | ongoing → ~week 4 | Open `npm test` live in an interview without shame |
-| **E** | Thin UI wired to new engine; deploy Vercel | ~1–2 weeks | You complete real checks for your own purchases |
-| **F** | Personal use 2+ weeks; 5–10 external users; fix pain | weeks | Metrics + qualitative feedback |
-| **G** | Supabase auth + profile + check history | ~1–2 weeks | Saved history works |
-| **H** | AI Explain button + guardrails | ~1 week | Numbers never come from the model |
-| **I** | Polish, DECISIONS.md ≥10 entries, presentation + OOP practice | through Nov | Ready to present |
+| **D** | Exhaustive Vitest | ongoing → ~week 4 | Open `npm test` live without shame |
+| **E** | Thin UI + deploy | 1–2 weeks | You run real personal checks on prod |
+| **F** | Real users | weeks | 5–10 external users; iterate |
+| **G** | Auth + history | 1–2 weeks | Saved profile + checks |
+| **H** | AI Explain | ~1 week | Numbers never come from the model |
+| **I** | Polish + present | through Nov | Ready for Round 2 |
 
 **Resume-ready bar:** Phases A–F solid; G–H strongly preferred before interviews.
 
@@ -204,13 +205,196 @@ Interview window: **Dec 2025 / Jan 2026**. Work engine-first.
 
 ---
 
-## 8. This week (immediate)
+## 7.1 Phase checklists
 
-1. Add cents money handling; convert core types  
-2. Write real failing tests for current decision edge cases  
-3. Split metrics out of the god function  
-4. Introduce `Rule` interface; migrate yes/wait/no into rules; add `risky`  
-5. First DECISIONS.md entries: cents; rule engine vs one function; yes/wait/risky/no policy  
+### Phase A — Integer cents
+**Work:** Dollars at the public edge; whole-cent math inside the engine; round after frequency normalize.
+
+**Contract chosen:** B — dollars in → cents inside `evaluateAffordability` → dollars out. (Strict branded `Cents` end-to-end is optional polish.)
+
+**Checklist**
+- [x] `money.ts`: `convertToCents` (`Math.round`) + `convertToDollars`
+- [x] Engine converts money fields to cents before math
+- [x] `Math.round` after `normalizeToPaycheque`
+- [x] Money outputs converted back to dollars before return
+- [x] Playground uses dollars consistently
+- [ ] Single `money.ts` only (delete duplicate `Money.ts` if present)
+- [ ] `DECISIONS.md`: why cents + why Contract B
+- [ ] Optional: branded `Cents` type + convert only at API edge (strict plan)
+
+**Done when:** No float money math in core; playground works.  
+**Out:** Rules, UI redesign, tests suite (start in D).
+
+---
+
+### Phase B — OOP rule engine
+**Work:** Turn the god function into metrics → composable rules → policy → `yes | wait | risky | no` + `riskFactors[]`. Round 1 OOP bridge.
+
+**Checklist**
+
+**B1 — Metrics extraction**
+- [ ] `metrics.ts`: input → metric object only (FCF, safe-to-spend, remaining, paycheques needed, dates, impacts)
+- [ ] God function no longer mixes “compute” and “decide” in one blob
+- [ ] Playground still runs
+
+**B2 — Rule interface**
+- [ ] `Rule` with `name` + `evaluate(ctx) → { severity: ok|warn|block, factor? }`
+- [ ] Shared `EvaluationContext` (metrics + fields rules need)
+- [ ] One rule implemented end-to-end as proof
+
+**B3 — Core rules**
+- [ ] Buffer / cash coverage rule
+- [ ] Timing / wait-vs-no rule
+- [ ] Paycheque impact rule → can emit `warn`
+- [ ] Category rule (`wants` / `needs` / `luxury`) → actually affects outcome
+- [ ] (Optional) goal-delay / savings rule
+
+**B4 — Policy + `risky`**
+- [ ] `Decision` includes `"risky"`
+- [ ] Output includes `riskFactors: string[]`
+- [ ] Explicit composition (example): any hard `block` → `no`; shortfall + timing OK → `wait`; covered + `warn` → `risky`; covered + clean → `yes`
+- [ ] `DECISIONS.md` entry for that policy
+
+**B5 — Integration**
+- [ ] `evaluateAffordability` orchestrates only (no big business if/else tree)
+- [ ] Adding a rule does not require rewriting the orchestrator
+- [ ] Phase A cents boundary still intact
+
+**B6 — Smoke proof**
+- [ ] yes / wait / risky / no each happen at least once (playground or a few tests)
+- [ ] Can whiteboard: “new rule = new file, register it, done”
+
+**Done when:** Can whiteboard “add a rule without touching others.”  
+**Out:** What-if snapshot (C), full test suite (D), AI/auth.
+
+---
+
+### Phase C — What-if snapshot
+**Work:** Show financial state **before** vs **after** the purchase. Mini ledger of state — not a full accounting product.
+
+**Checklist**
+- [ ] Define snapshot fields (e.g. cash, buffer remaining, FCF, goal pressure)
+- [ ] `before` snapshot from current metrics
+- [ ] `after` snapshot if purchase applied
+- [ ] Include snapshots in engine/API output
+- [ ] Thin UI or playground prints before/after
+- [ ] `DECISIONS.md`: what accounts exist; void/edit policy (derived state, not hand-edited balances)
+- [ ] Smoke: one yes and one no/risky case show different after-states
+
+**Done when:** API/demo shows before vs after.  
+**Out:** Double-entry textbook completeness; bank sync.
+
+---
+
+### Phase D — Exhaustive tests
+**Work:** Tests become the strongest interview artifact. Deterministic engine, edge cases, a few invariants.
+
+**Checklist**
+- [ ] Delete stub `1+1=2` test
+- [ ] Money helpers tested (`convertToCents` rounding cases)
+- [ ] Metrics tested in isolation
+- [ ] Each rule tested (ok / warn / block paths)
+- [ ] Policy composition tested (yes / wait / risky / no)
+- [ ] Edge cases: zero income, negative cash, exact boundary purchase, FCF ≤ 0, huge purchase, zero buffer, category-driven risky, date miss
+- [ ] Target ~40–60 engine tests
+- [ ] Optional: property test (e.g. `yes` never implies buffer breach)
+- [ ] `npm test` is something you’d open live in an interview
+
+**Done when:** Open `npm test` live without shame.  
+**Note:** Start a few tests during B; finish breadth here.
+
+---
+
+### Phase E — Thin UI + deploy
+**Work:** Wire form to the new engine; ship a public URL. UI stays thin.
+
+**Checklist**
+- [ ] Form fields match current `AffordabilityInput`
+- [ ] API validates input; rejects garbage; trust boundary clear
+- [ ] Response shows decision, metrics, `riskFactors`, before/after (if C done)
+- [ ] Decision colors / copy for `risky`
+- [ ] Deploy to Vercel
+- [ ] You complete ≥3 real personal purchase checks on prod
+- [ ] Hollow UI fields removed or wired (no fake score)
+
+**Done when:** You run real personal checks on the deployed app.  
+**Out:** Design polish theater; AI; auth.
+
+---
+
+### Phase F — Real users
+**Work:** Use it yourself; get 5–10 others; fix pain. Product proof for the presentation.
+
+**Checklist**
+- [ ] Personal use for 2+ weeks (log decisions it changed)
+- [ ] 5–10 external users complete a check
+- [ ] Collect qualitative feedback (confusing fields, wrong verdicts)
+- [ ] Fix top 2–3 pain points in engine or UI
+- [ ] Note 1–2 metrics you can cite (checks completed, decision mix)
+
+**Done when:** Metrics + qualitative feedback you can speak to.  
+**Out:** Growth hacking; paid ads.
+
+---
+
+### Phase G — Auth + history
+**Work:** Supabase accounts; save profile + check history.
+
+**Checklist**
+- [ ] Auth (email magic link or equivalent)
+- [ ] `profiles` table for recurring inputs
+- [ ] `checks` table for history (decision + key metrics)
+- [ ] RLS / least privilege; no secrets in client
+- [ ] UI: save profile; view past checks
+- [ ] `DECISIONS.md`: what you store vs refuse to store (data minimization)
+
+**Done when:** Saved profile + history works end to end.  
+**Out:** Social features; team orgs.
+
+---
+
+### Phase H — AI Explain
+**Work:** Untrusted narrator over trusted engine JSON. WS AI-trust theme.
+
+**Checklist**
+- [ ] Opt-in “Explain” button (not auto)
+- [ ] LLM receives engine output JSON only
+- [ ] UI shows engine numbers first; AI labeled explanation / not advice
+- [ ] Guardrails: no stock picks, no guaranteed returns
+- [ ] Optional: reject/flag if explanation invents amounts
+- [ ] `DECISIONS.md`: math decides / AI explains
+
+**Done when:** Numbers never come from the model.  
+**Out:** AI that posts decisions or changes verdicts.
+
+---
+
+### Phase I — Polish + present
+**Work:** Interview-ready artifact and Round 1/2 prep.
+
+**Checklist**
+- [ ] DECISIONS.md ≥10 honest entries
+- [ ] Slide outline: pitch → architecture → cents → rules → what-if → demo + tests
+- [ ] Live demo path rehearsed (<5 min)
+- [ ] Whiteboard architecture + every rule cold
+- [ ] OOP class-design practice weekly (parallel)
+- [ ] Resume bullet framed as decision engine (not “budgeting app”)
+- [ ] Definition of done (§10) mostly checked
+
+**Done when:** Ready for Round 2 presentation.  
+**Out:** New major features after freeze date (~late Nov).
+
+---
+
+## 8. Next up (after Phase A)
+
+Phase A practical path is largely complete. Focus:
+
+1. Finish A cleanup: one `money.ts`; `DECISIONS.md` cents entry  
+2. Phase B1: extract metrics  
+3. Phase B2–B4: `Rule` interface → rules → policy + `risky`  
+4. Phase B6 smoke + start a few real Vitest cases (feeds D)  
+5. `DECISIONS.md`: rule engine vs god function; four-way policy  
 
 ---
 

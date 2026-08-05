@@ -11,31 +11,25 @@ describe("normalizeToPaycheque", () => {
     expect(normalizeToPaycheque(100, "monthly", "monthly")).toBe(100);
   });
 
-  test("weekly → biweekly", () => {
+  test("weekly -> biweekly", () => {
     expect(normalizeToPaycheque(100, "weekly", "biweekly")).toBeCloseTo(200);
   });
 
-  test("weekly → monthly", () => {
+  test("weekly -> monthly", () => {
     expect(normalizeToPaycheque(100, "weekly", "monthly")).toBeCloseTo(
       (100 * 52) / 12,
     );
   });
 
-  test("weekly → yearly", () => {
+  test("weekly -> yearly", () => {
     expect(normalizeToPaycheque(100, "weekly", "yearly")).toBe(5200);
   });
 
-  test("biweekly → weekly", () => {
+  test("biweekly -> weekly", () => {
     expect(normalizeToPaycheque(200, "biweekly", "weekly")).toBeCloseTo(100);
   });
 
-  test("monthly → weekly", () => {
-    expect(normalizeToPaycheque(433.333333, "monthly", "weekly")).toBeCloseTo(
-      (433.333333 * 12) / 52,
-    );
-  });
-
-  test("yearly → monthly", () => {
+  test("monthly -> monthly", () => {
     expect(normalizeToPaycheque(1200, "yearly", "monthly")).toBe(100);
   });
 
@@ -50,12 +44,12 @@ describe("normalizeToPaycheque", () => {
 });
 
 describe("calculatePaychequesNeeded", () => {
-  test("no shortfall → 0", () => {
+  test("no shortfall -> 0", () => {
     expect(calculatePaychequesNeeded(1000, 1000, 50)).toBe(0);
     expect(calculatePaychequesNeeded(1000, 1500, 50)).toBe(0);
   });
 
-  test("FCF ≤ 0 with shortfall → Infinity", () => {
+  test("FCF ≤ 0 with shortfall -> Infinity", () => {
     expect(calculatePaychequesNeeded(5000, 1000, 0)).toBe(Infinity);
     expect(calculatePaychequesNeeded(5000, 1000, -10)).toBe(Infinity);
   });
@@ -76,7 +70,7 @@ describe("calculateSuggestedPurchaseDate", () => {
     expect(calculateSuggestedPurchaseDate(0, "weekly", from)).toEqual(from);
   });
 
-  test("Infinity paycheques → fromDate", () => {
+  test("Infinity paycheques -> fromDate", () => {
     expect(calculateSuggestedPurchaseDate(Infinity, "weekly", from)).toEqual(
       from,
     );

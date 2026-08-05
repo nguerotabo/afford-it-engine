@@ -1,7 +1,7 @@
 # DECISIONS.md
 
-Log every real engineering/product choice here.  
-**Strategy source of truth:** [PROJECT_PLAN.md](./PROJECT_PLAN.md)
+Log of engineering/product choices.
+**Source of truth:** [PROJECT_PLAN.md](./PROJECT_PLAN.md)
 
 Format for each entry:
 
@@ -28,6 +28,15 @@ Format for each entry:
 - Alternatives considered: Three-way yes/wait/no only (old code)
 - Why: Matches product intent and forces explicit risk modeling
 - What I'd change at scale: Tunable thresholds per user risk profile
+
+
+- Date: 2026-08-01
+- Decision: Convert all input number values to cents before any calculations are done
+- Meaning: When a user input all their data for the AffordabilityForm, we convert all of them to cents to make sure calculations are done properly and we have no float errors. After calculations are done, the values are converted back to dollars. 
+- Alternatives considered: Create a Cent type as input instead of using a number variable. Could be done later but for now all inputs are stored as numbers and the conversion to cents is done.
+- Why: Limits calculation errors and increases engine accuracy.
+- What I'd change at scale: Adopt option B with a Cent type to precisely know. 
+
 
 ---
 
