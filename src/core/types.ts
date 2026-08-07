@@ -7,12 +7,14 @@ export type AffordabilityInput = {
     minimumBuffer: number; // lowest allowed cash available. 
     purchasePrice: number;
     desiredPurchaseDate: Date; // have suggestedPurchaseDate in output. 
-    purchaseCategory: "wants" | "needs" | "luxury";
+    purchaseCategory: PurchaseCategory;
     savingsCommitment: number; // create subtype for weekly, monthly, yearly. Allow user to input any frequency.
     savingsCommitmentFrequency: frequency
 }
 
 export type frequency = "weekly" | "monthly" | "yearly" | "biweekly";
+
+export type PurchaseCategory = "wants" | "needs" | "luxury";
 
 export type Decision = "yes" | "no" | "wait";
 
@@ -27,4 +29,6 @@ export type AffordabilityOutput = {
     affordabilityScore: number; // figure out a way to make this happen.
     remainingAfter: number; 
     freeCashFlow: number;
+    purchaseCategory: PurchaseCategory;
 }
+
