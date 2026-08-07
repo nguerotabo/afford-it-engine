@@ -21,3 +21,4 @@ export class paychequeImpactRule implements Rule {
     }
 }
 
+ 
