@@ -16,7 +16,7 @@ export type frequency = "weekly" | "monthly" | "yearly" | "biweekly";
 
 export type PurchaseCategory = "wants" | "needs" | "luxury";
 
-export type Decision = "yes" | "no" | "wait";
+export type Decision = "yes" | "no" | "wait" | "risky";
 
 export type AffordabilityOutput = {
     decision: Decision;
@@ -26,9 +26,10 @@ export type AffordabilityOutput = {
     paychequesNeeded: number;
     totalImpact: number;
     paychequeImpact: number;
-    affordabilityScore: number; // figure out a way to make this happen.
+    affordabilityScore: number;
     remainingAfter: number; 
     freeCashFlow: number;
     purchaseCategory: PurchaseCategory;
+    riskFactors: string[];
 }
 

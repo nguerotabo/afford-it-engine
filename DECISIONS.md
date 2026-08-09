@@ -29,6 +29,7 @@ Format for each entry:
 - Why: Matches product intent and forces explicit risk modeling
 - What I'd change at scale: Tunable thresholds per user risk profile
 
+---
 
 - Date: 2026-08-01
 - Decision: Convert all input number values to cents before any calculations are done
@@ -37,6 +38,22 @@ Format for each entry:
 - Why: Limits calculation errors and increases engine accuracy.
 - What I'd change at scale: Adopt option B with a Cent type to precisely know. 
 
+
+---
+
+## Policy composition (rule results → decision)
+
+- Date: 2026-08-06
+- Decision: `applyPolicy` owns the final stamp from rule severities
+- Composition:
+  - **buffer ok + no warns** → `yes`
+  - **buffer ok + any warn** (impact / category / …) → `risky` + those warn factors in `riskFactors`
+  - **buffer block + timing ok** → `wait` (save until earliest affordable date)
+  - **buffer block + timing block** → `no` (can't save, or misses desired date)
+- Timing rule also **blocks** when `paychequesNeeded` is non-finite (FCF ≤ 0), so "earliest = now" is not treated as reachable
+- Alternatives considered: keep god if/else on metrics; fold policy into each rule
+- Why: Rules stay single-purpose; policy is one place to change product opinion; matches OOP interview story
+- What I'd change at scale: per-user thresholds; weighted warns; separate "hard block" vs "soft block"
 
 ---
 

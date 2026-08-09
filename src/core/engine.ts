@@ -1,52 +1,49 @@
-import type { AffordabilityInput, AffordabilityOutput, Decision } from "./types";
+import type { AffordabilityInput, AffordabilityOutput } from "./types";
 import { calculateMetrics } from "./metrics";
 import { convertToDollars } from "./money";
+import { applyPolicy } from "./policy";
+import { bufferRule } from "./rules/bufferRule";
+import { categoryRule } from "./rules/categoryRule";
+import { timingRule } from "./rules/timingRule";
+import { paychequeImpactRule } from "./rules/paychequeImpactRule";
+import type { Rule } from "./rules/rule";
 
-export function evaluateAffordability(input: AffordabilityInput): AffordabilityOutput {
-    let {   
-      desiredPurchaseDate,
-    } = input;
+const RULES: Rule[] = [
+    new bufferRule(),
+    new categoryRule(),
+    new timingRule(),
+    new paychequeImpactRule(),
+];
 
-    //Calculate all the facts and metrics
+export function evaluateAffordability(
+    input: AffordabilityInput,
+): AffordabilityOutput {
     const metrics = calculateMetrics(input);
+    const context = { input, metrics };
 
-    // Decision uses desiredPurchaseDate as the wait/no boundary.
-    let finalDecision: Decision;
-    let suggestedPurchaseDate: Date;
+    const results = RULES.map((rule) => ({
+        name: rule.name,
+        result: rule.evaluate(context),
+    }));
 
-    if (metrics.remainingAfter >= 0) {
-      // Affordable now, buffer safe
-      finalDecision = "yes";
-      suggestedPurchaseDate = desiredPurchaseDate;
-    } else if (!Number.isFinite(metrics.paychequesNeeded)) {
-      // Can't save toward it (no free cash flow)
-      finalDecision = "no";
-      suggestedPurchaseDate = desiredPurchaseDate;
-    } else if (metrics.earliestAffordableDate.getTime() <= desiredPurchaseDate.getTime()) {
-      // Not now, but reachable by the date they want
-      finalDecision = "wait";
-      suggestedPurchaseDate = metrics.earliestAffordableDate;
-    } else {
-      // Misses their target date; still surface when it would become affordable
-      finalDecision = "no";
-      suggestedPurchaseDate = metrics.earliestAffordableDate;
-    }
-
-    //Convert everything back to dollars
-    const safeToSpend = convertToDollars(metrics.safeToSpend);
-    const remainingAfter = convertToDollars(metrics.remainingAfter);
-    const freeCashFlowPerPaycheque = convertToDollars(metrics.freeCashFlowPerPaycheque);
+    const { decision, suggestedPurchaseDate, riskFactors } = applyPolicy(
+        input,
+        metrics,
+        results,
+    );
 
     return {
-      decision: finalDecision,
-      reason: "The AI will generate this later based on the metrics.",
-      suggestedPurchaseDate,
-      safeToSpend,
-      paychequesNeeded: metrics.paychequesNeeded,
-      totalImpact: metrics.totalImpact,
-      paychequeImpact: metrics.paychequeImpact,
-      affordabilityScore: metrics.paychequeImpact,
-      remainingAfter,
-      freeCashFlow: freeCashFlowPerPaycheque,
+        decision,
+        reason: "The AI will generate this later based on the metrics.",
+        suggestedPurchaseDate,
+        safeToSpend: convertToDollars(metrics.safeToSpend),
+        paychequesNeeded: metrics.paychequesNeeded,
+        totalImpact: metrics.totalImpact,
+        paychequeImpact: metrics.paychequeImpact,
+        affordabilityScore: metrics.paychequeImpact,
+        remainingAfter: convertToDollars(metrics.remainingAfter),
+        freeCashFlow: convertToDollars(metrics.freeCashFlowPerPaycheque),
+        purchaseCategory: input.purchaseCategory,
+        riskFactors,
     };
-  }
+}
