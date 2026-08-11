@@ -68,7 +68,7 @@ export function applyPolicy(
         };
     }
 
-    // Buffer blocked — not affordable today.
+    // Buffer blocked - not affordable today.
     if (timingOk) {
         return {
             decision: "wait",
