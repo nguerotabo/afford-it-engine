@@ -3,6 +3,11 @@
 import { useState, type FormEvent } from "react";
 import type { Decision, frequency } from "@/lib/engine";
 
+type LedgerSnapshot = {
+  currentSavings: number;
+  safeToSpend: number;
+};
+
 type EvaluateResult = {
   decision: Decision;
   reason: string;
@@ -14,6 +19,8 @@ type EvaluateResult = {
   affordabilityScore: number | null;
   remainingAfter: number;
   freeCashFlow: number;
+  before: LedgerSnapshot;
+  after: LedgerSnapshot;
 };
 
 const FREQUENCIES: frequency[] = ["weekly", "biweekly", "monthly", "yearly"];
@@ -31,6 +38,7 @@ const pct = (ratio: number | null) =>
 const decisionLabel: Record<Decision, string> = {
   yes: "Yes — you can buy this",
   wait: "Wait — save a bit first",
+  risky: "Risky - covered, but watch the warnings",
   no: "No — not by that date",
 };
 
@@ -182,6 +190,45 @@ export function AffordabilityForm() {
             {decisionLabel[result.decision]}
           </h2>
           <p className="mt-3 max-w-xl text-muted">{result.reason}</p>
+
+          <div className="mt-8 border border-line p-4">
+            <p className="text-sm uppercase tracking-[0.18em] text-muted">
+              What-if snapshot
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              {result.after.currentSavings === result.before.currentSavings
+                ? "Purchase fits in this paycheque’s FCF — cash unchanged."
+                : "Purchase dips into cash above FCF."}
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <dl className="grid gap-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                  Before
+                </p>
+                <Metric
+                  label="Current savings"
+                  value={money(result.before.currentSavings)}
+                />
+                <Metric
+                  label="Safe to spend"
+                  value={money(result.before.safeToSpend)}
+                />
+              </dl>
+              <dl className="grid gap-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                  After
+                </p>
+                <Metric
+                  label="Current savings"
+                  value={money(result.after.currentSavings)}
+                />
+                <Metric
+                  label="Safe to spend"
+                  value={money(result.after.safeToSpend)}
+                />
+              </dl>
+            </div>
+          </div>
 
           <dl className="mt-8 grid gap-4 sm:grid-cols-2">
             <Metric label="Safe to spend" value={money(result.safeToSpend)} />

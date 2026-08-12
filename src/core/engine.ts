@@ -1,12 +1,23 @@
-import type { AffordabilityInput, AffordabilityOutput } from "./types";
+import type { AffordabilityInput, AffordabilityOutput, LedgerSnapshot } from "./types";
 import { calculateMetrics } from "./metrics";
 import { convertToDollars } from "./money";
 import { applyPolicy } from "./policy";
+import { calculateAfterLedger, calculateBeforeLedger } from "./ledger";
 import { bufferRule } from "./rules/bufferRule";
 import { categoryRule } from "./rules/categoryRule";
 import { timingRule } from "./rules/timingRule";
 import { paychequeImpactRule } from "./rules/paychequeImpactRule";
 import type { Rule } from "./rules/rule";
+
+function toLedgerSnapshot(ledger: {
+    currentSavings: number;
+    safeToSpend: number;
+}): LedgerSnapshot {
+    return {
+        currentSavings: convertToDollars(ledger.currentSavings),
+        safeToSpend: convertToDollars(ledger.safeToSpend),
+    };
+}
 
 const RULES: Rule[] = [
     new bufferRule(),
@@ -32,6 +43,9 @@ export function evaluateAffordability(
         results,
     );
 
+    const before = toLedgerSnapshot(calculateBeforeLedger(input, metrics));
+    const after = toLedgerSnapshot(calculateAfterLedger(input, metrics));
+
     return {
         decision,
         reason: "The AI will generate this later based on the metrics.",
@@ -45,5 +59,7 @@ export function evaluateAffordability(
         freeCashFlow: convertToDollars(metrics.freeCashFlowPerPaycheque),
         purchaseCategory: input.purchaseCategory,
         riskFactors,
+        before,
+        after,
     };
 }

@@ -351,3 +351,59 @@ describe("invariants", () => {
     expect(output.affordabilityScore).toBe(output.paychequeImpact);
   });
 });
+
+describe("what-if ledger", () => {
+  // baseInput: cash 5000, buffer 2000 → safe 3000; FCF 200
+
+  test("yes within FCF: cash unchanged before → after", () => {
+    const output = evaluateAffordability(baseInput({ purchasePrice: 150 }));
+
+    expect(output.decision).toBe("yes");
+    expect(output.before).toEqual({
+      currentSavings: 5000,
+      safeToSpend: 3000,
+    });
+    // price 150 ≤ FCF 200 → fromSavings 0
+    expect(output.after).toEqual({
+      currentSavings: 5000,
+      safeToSpend: 3000,
+    });
+  });
+
+  test("risky above FCF: after dips cash and differs from yes after-state", () => {
+    const yes = evaluateAffordability(baseInput({ purchasePrice: 150 }));
+    const risky = evaluateAffordability(baseInput({ purchasePrice: 3000 }));
+
+    expect(risky.decision).toBe("risky");
+    expect(risky.before).toEqual({
+      currentSavings: 5000,
+      safeToSpend: 3000,
+    });
+    // fromFcf 200, fromSavings 2800 → cash 2200, safe 200
+    expect(risky.after).toEqual({
+      currentSavings: 2200,
+      safeToSpend: 200,
+    });
+    expect(risky.after.currentSavings).not.toBe(yes.after.currentSavings);
+  });
+
+  test("no: still shows after-state if purchase applied now", () => {
+    const output = evaluateAffordability(
+      baseInput({
+        purchasePrice: 10_000,
+        desiredPurchaseDate: daysFromNow(1),
+      }),
+    );
+
+    expect(output.decision).toBe("no");
+    expect(output.before.currentSavings).toBe(5000);
+    // fromFcf 200, fromSavings 9800 → cash -4800
+    expect(output.after).toEqual({
+      currentSavings: -4800,
+      safeToSpend: -6800,
+    });
+    expect(output.after.currentSavings).toBeLessThan(
+      output.before.currentSavings,
+    );
+  });
+});

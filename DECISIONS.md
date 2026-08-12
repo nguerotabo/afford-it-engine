@@ -57,6 +57,21 @@ Format for each entry:
 
 ---
 
+## What-if ledger (before / after snapshot)
+
+- Date: 2026-08-10
+- Decision: Engine shows a mini-ledger with only stock fields — `currentSavings` and `safeToSpend` — as `before` and `after` on the output
+- Accounts / fields:
+  - **currentSavings** — cash on hand
+  - **safeToSpend** — cash above `minimumBuffer` (not a separate stored account)
+- Funding rule for `after`: apply purchase **FCF-first**; only the overflow touches cash. If price ≤ this paycheque’s FCF, cash is unchanged
+- Void / edit policy: snapshots are **derived each evaluate** from input + metrics. Not persisted balances; not hand-editable. “Undo” = re-run without the purchase (or with a different price)
+- Alternatives considered: mirror full metrics bag before/after; always subtract purchase from cash; include FCF/goal pressure as ledger rows
+- Why: Before/after should answer “does this buy dip cash?” without pretending we have double-entry accounting. Flows (FCF) and decision metrics (impact, paycheques needed) stay outside the ledger
+- What I'd change at scale: multi-account ledger; explicit funding sources; 
+
+---
+
 ## Tests location
 
 - Date: earlier

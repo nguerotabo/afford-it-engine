@@ -66,5 +66,7 @@ export async function POST(request: Request) {
     affordabilityScore: finiteOrNull(result.affordabilityScore),
     remainingAfter: result.remainingAfter,
     freeCashFlow: result.freeCashFlow,
+    before: result.before,
+    after: result.after,
   });
 }

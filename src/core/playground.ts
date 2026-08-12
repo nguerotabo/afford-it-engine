@@ -18,3 +18,5 @@ const input: AffordabilityInput = {
 const output = evaluateAffordability(input);
 
 console.log(output);
+console.log("before:", output.before);
+console.log("after:", output.after);

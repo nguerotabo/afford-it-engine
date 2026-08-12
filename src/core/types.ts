@@ -18,6 +18,11 @@ export type PurchaseCategory = "wants" | "needs" | "luxury";
 
 export type Decision = "yes" | "no" | "wait" | "risky";
 
+export type LedgerSnapshot = {
+    currentSavings: number;
+    safeToSpend: number;
+};
+
 export type AffordabilityOutput = {
     decision: Decision;
     reason: string;
@@ -31,5 +36,7 @@ export type AffordabilityOutput = {
     freeCashFlow: number;
     purchaseCategory: PurchaseCategory;
     riskFactors: string[];
+    before: LedgerSnapshot;
+    after: LedgerSnapshot;
 }
 
