@@ -1,20 +1,25 @@
 import type { Metrics } from "../src/core/metrics";
 import type { EvaluationContext } from "../src/core/rules/rule";
 import type { AffordabilityInput } from "../src/core/types";
+import { startOfLocalDay } from "../src/core/utils";
 
-/** Baseline weekly inputs: FCF = 200, safeToSpend = 3000 */
+export function today(): Date {
+  return startOfLocalDay(new Date());
+}
+
+/** Baseline weekly inputs: FCF = 200 (income − expenses; savings commitment is not subtracted), safeToSpend = 3000 */
 export function baseInput(
   overrides: Partial<AffordabilityInput> = {},
 ): AffordabilityInput {
   return {
     paycheque: 500,
     paychequeFrequency: "weekly",
-    expenses: 50,
+    expenses: 300,
     expensesFrequency: "weekly",
     currentSavings: 5000,
     minimumBuffer: 2000,
     purchasePrice: 3000,
-    desiredPurchaseDate: new Date("2026-10-30"),
+    desiredPurchaseDate: today(),
     purchaseCategory: "wants",
     savingsCommitment: 250,
     savingsCommitmentFrequency: "weekly",
@@ -40,6 +45,7 @@ export function ruleContext(
       paychequeImpact: 0,
       totalImpact: 0,
       paychequesNeeded: 0,
+      paychequesUntilDesired: 0,
       earliestAffordableDate: new Date(0),
       ...metricsOverrides,
     },

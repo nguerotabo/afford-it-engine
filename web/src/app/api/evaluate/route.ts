@@ -1,71 +1,39 @@
 import { NextResponse } from "next/server";
-import {
-  evaluateAffordability,
-  type AffordabilityInput,
-  type frequency,
-} from "@/lib/engine";
-
-type EvaluateBody = {
-  paycheque: number;
-  paychequeFrequency: frequency;
-  expenses: number;
-  expensesFrequency: frequency;
-  currentSavings: number;
-  minimumBuffer: number;
-  purchasePrice: number;
-  desiredPurchaseDate: string;
-  purchaseCategory: "wants" | "needs" | "luxury";
-  savingsCommitment: number;
-  savingsCommitmentFrequency: frequency;
-};
+import { evaluateAffordability, parseAffordabilityInput } from "@/lib/engine";
 
 function finiteOrNull(n: number): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
 export async function POST(request: Request) {
-  let body: EvaluateBody;
+  let body: unknown;
 
   try {
-    body = (await request.json()) as EvaluateBody;
+    body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const input: AffordabilityInput = {
-    paycheque: Number(body.paycheque),
-    paychequeFrequency: body.paychequeFrequency,
-    expenses: Number(body.expenses),
-    expensesFrequency: body.expensesFrequency,
-    currentSavings: Number(body.currentSavings),
-    minimumBuffer: Number(body.minimumBuffer),
-    purchasePrice: Number(body.purchasePrice),
-    desiredPurchaseDate: new Date(body.desiredPurchaseDate),
-    purchaseCategory: body.purchaseCategory,
-    savingsCommitment: Number(body.savingsCommitment),
-    savingsCommitmentFrequency: body.savingsCommitmentFrequency,
-  };
-
-  if (Number.isNaN(input.desiredPurchaseDate.getTime())) {
-    return NextResponse.json(
-      { error: "desiredPurchaseDate must be a valid date" },
-      { status: 400 },
-    );
+  const parsed = parseAffordabilityInput(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const result = evaluateAffordability(input);
+  const result = evaluateAffordability(parsed.input);
 
   return NextResponse.json({
     decision: result.decision,
     reason: result.reason,
     suggestedPurchaseDate: result.suggestedPurchaseDate.toISOString(),
+    earliestAffordableDate: result.earliestAffordableDate.toISOString(),
+    desiredPurchaseDate: parsed.input.desiredPurchaseDate.toISOString(),
     safeToSpend: result.safeToSpend,
     paychequesNeeded: finiteOrNull(result.paychequesNeeded),
     totalImpact: finiteOrNull(result.totalImpact),
     paychequeImpact: finiteOrNull(result.paychequeImpact),
-    affordabilityScore: finiteOrNull(result.affordabilityScore),
     remainingAfter: result.remainingAfter,
     freeCashFlow: result.freeCashFlow,
+    riskFactors: result.riskFactors,
     before: result.before,
     after: result.after,
   });

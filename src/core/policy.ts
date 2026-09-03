@@ -35,8 +35,7 @@ function factorsWithSeverity(
  * Composition (see DECISIONS.md):
  * - buffer ok + any warn → risky
  * - buffer ok + no warns → yes
- * - buffer block + timing ok → wait
- * - buffer block + timing block → no
+ * - buffer block → no (`wait` kept on Decision type but unused in v1)
  */
 export function applyPolicy(
     input: AffordabilityInput,
@@ -44,13 +43,11 @@ export function applyPolicy(
     results: NamedRuleResult[],
 ): PolicyOutput {
     const buffer = resultByName(results, "bufferRule");
-    const timing = resultByName(results, "timingRule");
 
     const warnFactors = factorsWithSeverity(results, "warn");
     const blockFactors = factorsWithSeverity(results, "block");
 
     const bufferOk = buffer?.severity === "ok";
-    const timingOk = timing?.severity === "ok";
 
     if (bufferOk) {
         if (warnFactors.length > 0) {
@@ -68,16 +65,7 @@ export function applyPolicy(
         };
     }
 
-    // Buffer blocked - not affordable today.
-    if (timingOk) {
-        return {
-            decision: "wait",
-            suggestedPurchaseDate: metrics.earliestAffordableDate,
-            riskFactors: [...blockFactors, ...warnFactors],
-        };
-    }
-
-    // Unreachable in time, or cannot save at all.
+    // Not covered by the desired date (or unreachable). Timing factors stay in riskFactors.
     const suggestedPurchaseDate = Number.isFinite(metrics.paychequesNeeded)
         ? metrics.earliestAffordableDate
         : input.desiredPurchaseDate;

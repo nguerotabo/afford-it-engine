@@ -2,13 +2,13 @@
 
 **Status:** Active reference. Supersedes the old blueprint where they conflict.  
 **Target:** SWE internship interviews (Dec 2025 / Jan 2026) — Round 2 project presentation + Round 1 OOP prep.  
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-18
 
 ---
 
 ## 1. Pitch
 
-A money decision app for students, interns, and new grads that answers one question before you spend: **can I afford this purchase?** — based on paycheque income, bills, savings commitment, and a safety buffer.
+A money decision app for students, interns, and new grads that answers one question before you spend: **can I afford this purchase by the date I care about?** — based on paycheque income, obligations, a safety buffer, and (optionally) a savings plan that grows cash rather than draining free cash flow.
 
 **Not** another budgeting app (those track the past). This owns the moment before you buy.
 
@@ -23,7 +23,7 @@ A money decision app for students, interns, and new grads that answers one quest
 |---|---|---|
 | Keep vs pivot | **Keep this product** | Real users + personal use + fintech narrative. Do not pivot to a systems toy unless this stalls. |
 | Where depth lives | **Decision engine** | Presentation artifact = engine craft, not Next.js chrome. |
-| UI timing | **Engine first, UI thin** | Do not grow the form until the engine survives a whiteboard. |
+| UI timing | **Engine first (done enough); now shrink the shell** | The 11-field staged form is the bottleneck. Habit = 3-field setup, then price-only. Do not grow knobs. |
 | Gemini-style add-ons (Plaid, Redis) | **Out of scope** | Integrator theater. Fake complexity. |
 | PoppyDB comparison | **Different class** | Systems/DB internals. We win on domain + trustworthy architecture, not LSM trees. |
 | Audience | **Any SWE intern seat** | Product + craft travels; team fit still varies. |
@@ -59,22 +59,29 @@ Company-wide interests (per WS intern, 2026): **reliability/security** and **AI 
 
 **In for v1 (resume-ready):**
 - Deep decision engine (see §5)
-- Thin form → API → verdict + metrics + risk factors
+- **User-usable shell (Phase U):** two-visit UX, not an 11-field demo
 - Deployed demo
 - You use it for your own finances
-- 5+ real people complete a check
+- 5+ real people complete a check (named people, not Reel clicks)
 - Exhaustive engine tests
 - DECISIONS.md with honest tradeoffs
 
-**Explicitly out until engine is done:**
+**Phase U product shape (GPA-calculator loop):**
+- **First visit (setup, once):** paycheck, bills, cash in the bank. Frequency defaults to biweekly. Buffer defaults to `$500`. Savings commitment defaults to `0`. Category defaults to `wants`.
+- **Return visit (the product):** price + optional date (default **today**). Profile from `localStorage`. Button. Verdict.
+- Engine contract **does not change**. The UI fills hidden fields so `/api/evaluate` still gets a full `AffordabilityInput`.
+- Phone-first hot path. Screenshot-stupid verdict (`No — 3 paycheques`). `?price=` deep link. Add-to-home-screen after first real check.
+
+**Explicitly out (still):**
 - Plaid / bank sync
 - Redis / caching theater
 - Investing, social, milestone calculators
 - Monetization polish
-- Mobile PWA
+- Auth / Supabase (Phase G — after people actually return)
+- Paid ads; Reels as a user-acquisition funnel before the hot path exists
 
-**v2 (after real users):** saved profile + history, guilt-free weekly number, scenario compare, opportunity-cost simulator.  
-**v3 (later):** milestones, CSV import, PWA.
+**v2 (after real users):** cloud profile + history (Supabase), guilt-free weekly number, scenario compare, opportunity-cost simulator.  
+**v3 (later):** milestones, CSV import, PWA polish beyond add-to-home-screen.
 
 ---
 
@@ -83,10 +90,12 @@ Company-wide interests (per WS intern, 2026): **reliability/security** and **AI 
 This is the main presentation. Everything else supports it.
 
 ### 5.1 Current state (honest)
-- ~one function: normalize → math → yes/wait/no
+- Metrics → rules → policy → what-if ledger; trust-boundary `parseAffordabilityInput`
 - **Cents (Contract B):** dollars in → integer cents inside engine → dollars out; round after frequency normalize
-- Unused `purchaseCategory`; fake score; placeholder AI reason
-- Stub tests; no `risky` / risk factors despite earlier notes
+- Decisions: `yes | risky | no` in practice (`wait` reserved, unused in v1)
+- Affordability judged **as of desired purchase date**; calendar-day date math; FCF = income − expenses
+- Exhaustive vitest suite on engine / rules / money / parse
+- Thin Next.js form + `/api/evaluate`; AI reason still placeholder
 
 ### 5.2 Target architecture
 
@@ -98,8 +107,8 @@ API route (validate input, trust boundary)
     │
     ├──► Metrics (pure facts: FCF, safe-to-spend, impact, dates…)
     ├──► Rule engine (OOP: each concern = a Rule)
-    ├──► Policy (combine rule results → yes | wait | risky | no)
-    ├──► What-if snapshot (before / after purchase state)
+    ├──► Policy (combine rule results → yes | risky | no; wait reserved)
+    ├──► What-if snapshot (now vs after buy on desired date)
     │
     ├──► [v2] DB: profile + check history
     └──► [after engine] AI narrator (engine JSON → prose only)
@@ -114,40 +123,38 @@ API route (validate input, trust boundary)
 
 ### 5.4 Metrics (facts only — no verdict)
 Compute at least:
-- Free cash flow per paycheque (after expenses + savings commitment)
-- Safe to spend today (cash − buffer [− upcoming bills when added])
-- Remaining after purchase
+- Free cash flow per paycheque (**income − expenses**; savings commitment is plan-into-cash, not subtracted)
+- Safe to spend today (cash − buffer)
+- Remaining after purchase **on the desired date** (projected FCF × pay periods)
 - Paycheques needed / earliest affordable date
+- Paycheques until desired date
 - Paycheque impact, total impact
-- Before/after snapshot fields the rules need
 
 ### 5.5 OOP rule engine (Round 1 bridge)
 Each rule owns one concern and returns severity + optional risk factor, e.g.:
-- Buffer / cash coverage
-- Timing (desired date vs earliest affordable)
-- Paycheque impact too high
-- Savings goal delay
-- Category risk (wants / needs / luxury) — **use** `purchaseCategory`
+- Buffer / cash coverage (projected)
+- Timing (desired date vs earliest affordable; calendar days)
+- Paycheque impact too high (current-period buys only)
+- Category risk — luxury warns only when post-buy cushion < 2 months of expenses
 
 Orchestrator combines results. Adding a rule does not rewrite the core.
 
 ### 5.6 Decision policy (write exact rules in DECISIONS.md)
 
-| Decision | Meaning |
+| Decision | Meaning (v1) |
 |---|---|
-| **yes** | Affordable now; financially healthy; no meaningful risk flags |
-| **wait** | Not now; timing problem; reachable by saving within target date |
-| **risky** | Technically payable, but buffer/impact/goals/category warn |
-| **no** | Can’t / shouldn’t without breaking bills, buffer, or unreachable timing |
+| **yes** | Covered by desired date; buffer intact; no meaningful risk flags |
+| **risky** | Covered by desired date, but warns (thin luxury cushion / current-period impact) |
+| **no** | Not covered by desired date, or FCF ≤ 0 |
+| **wait** | Reserved on the type; **not emitted** in v1 |
 
 Composition must be explicit (what blocks vs warns). Log every change in DECISIONS.md.
 
 ### 5.7 What-if state (mini ledger)
-- Snapshot of relevant balances **before** purchase
-- Snapshot **after** if they buy
-- Clear movement of cash / buffer / goal pressure
+- **before** = now (what the user typed: cash + safe-to-spend)
+- **after** = cash on the **desired purchase date** after the buy (income/expenses projected, then purchase)
+- Same-day buy: FCF-first funding; later dates: full price from the projected pile
 - Correctness > full accounting textbook; balanced story required
-
 ### 5.8 Tests (strongest interview proof)
 - Delete stub tests
 - 40–60 unit cases on engine/rules/money
@@ -192,12 +199,13 @@ Interview window: **Dec 2025 / Jan 2026**. Work engine-first.
 | **C** | What-if before/after snapshot | ~1 week | API/demo shows before vs after |
 | **D** | Exhaustive Vitest | ongoing → ~week 4 | Open `npm test` live without shame |
 | **E** | Thin UI + deploy | 1–2 weeks | You run real personal checks on prod |
-| **F** | Real users | weeks | 5–10 external users; iterate |
-| **G** | Auth + history | 1–2 weeks | Saved profile + checks |
+| **U** | User-usable shell | 3–7 days | Setup once, then price-only on a phone |
+| **F** | Real users | weeks | 5–10 named people complete a check; iterate |
+| **G** | Auth + history | 1–2 weeks | Cloud profile + checks |
 | **H** | AI Explain | ~1 week | Numbers never come from the model |
 | **I** | Polish + present | through Nov | Ready for Round 2 |
 
-**Resume-ready bar:** Phases A–F solid; G–H strongly preferred before interviews.
+**Resume-ready bar:** Phases A–D + U + F solid; G–H strongly preferred before interviews. Engine-without-U is a demo, not a tool.
 
 ### Parallel (not product work)
 - Practice OOP class-design problems (LLM-generated, highly detailed prompts) for Round 1
@@ -322,18 +330,93 @@ Interview window: **Dec 2025 / Jan 2026**. Work engine-first.
 
 ---
 
+### Phase U — User-usable shell (do this before chasing users)
+
+**Work:** Turn the staged 11-field form into a pop-out tool. Same engine. Different visits.
+
+**Why now:** People will complete a check if it is as fast as a GPA calculator. They will not, if every impulse means re-entering income. Reels/content come *after* this. Auth/Plaid do not unblock this.
+
+**Two visits**
+
+| Visit | What they type | Where the rest comes from |
+|---|---|---|
+| **1 — Setup** | Paycheck, bills, cash | Frequency = biweekly; buffer = `$500`; savings = `0`; category = `wants` |
+| **2+ — Check** | Price; date defaults to today | `localStorage` profile + same defaults |
+
+**Field cut**
+
+| Input | Today | After U |
+|---|---|---|
+| Current cash | Shown | Setup once |
+| Income | Shown | Setup once |
+| Income frequency | Shown | Default biweekly; edit in profile |
+| Obligations | Shown | Setup once |
+| Obligation frequency | Shown | Default biweekly; edit in profile |
+| Minimum buffer | Shown | Default `$500`; edit in profile |
+| Savings commitment + freq | Shown | Default `0`; hidden on hot path |
+| Price | Shown | **Every check** |
+| Category | Shown | Default `wants`; hidden on hot path |
+| Desired date | Shown | Every check; **default today** |
+
+**Checklist (order is the build order)**
+
+**U1 — Defaults at the edge (engine untouched)**
+- [ ] UI always POSTs a full `AffordabilityInput`
+- [ ] Hidden / defaulted: frequencies `biweekly`, `minimumBuffer` `500`, `savingsCommitment` `0`, `purchaseCategory` `wants`
+- [ ] `desiredPurchaseDate` defaults to **today** (local calendar date)
+- [ ] `DECISIONS.md`: why these defaults; what you’d let users tune later
+
+**U2 — `localStorage` profile (no auth)**
+- [ ] Persist: cash, paycheck, paycheck frequency, expenses, expense frequency, buffer
+- [ ] Load on boot; skip setup when profile exists
+- [ ] “Edit money” path to change the profile without doing a check
+- [ ] Do not persist purchase price/date (those are the check, not the person)
+- [ ] Data minimization note in `DECISIONS.md` (device-only; no account)
+
+**U3 — Split the UI into setup vs check**
+- [ ] Setup screen: 3 numbers + save. Then first check (price).
+- [ ] Check screen: giant price input, date, one button
+- [ ] Kill staged 01/02/03 essay layout on the tool surface (landing copy can stay short above)
+- [ ] Returning user: price focused on load (or honor `?price=`)
+
+**U4 — Phone hot path + screenshot verdict**
+- [ ] One screen on a phone; verdict above the fold; no scroll theater to see yes/no
+- [ ] Headline is the whole answer: `Yes — you can buy this` / `No — 3 paycheques` / `Risky — …`
+- [ ] Ledger / risk factors behind “why”, not competing with the stamp
+- [ ] After first successful evaluate, prompt **Add to Home Screen** (PWA lite: manifest + apple touch icon). Full PWA polish is v3.
+
+**U5 — Impulse deep link**
+- [ ] `/?price=89.99` pre-fills price
+- [ ] If profile exists → land on check. If not → setup, then check with price kept
+- [ ] Optional: `?date=YYYY-MM-DD`
+
+**U6 — Deploy, then you use it**
+- [ ] Public Vercel URL (finish Phase E deploy if still local)
+- [ ] You complete ≥3 real personal purchases on prod **using only the check screen**
+- [ ] Count **evaluates**, not page views. PostHog or a single server log is enough.
+
+**U7 — Then, and only then, other people**
+- [ ] Hand the URL to 5–10 people who have a real purchase this week (Phase F)
+- [ ] Watch one person do setup + check on a phone. Cut whatever they hesitate on.
+- [ ] Content/Reels only after a stranger can finish a return check in ~15s
+
+**Done when:** Returning user types a price and gets a verdict without re-entering income. You have a public URL.  
+**Out:** Auth, Plaid, AI Explain, growth content as the first distribution plan, adding fields.
+
+---
+
 ### Phase F — Real users
-**Work:** Use it yourself; get 5–10 others; fix pain. Product proof for the presentation.
+**Work:** Use it yourself; get 5–10 others; fix pain. Product proof for the presentation. **Blocked on U** — do not recruit until return-visit is price-only.
 
 **Checklist**
 - [ ] Personal use for 2+ weeks (log decisions it changed)
-- [ ] 5–10 external users complete a check
+- [ ] 5–10 **named** external users complete a check (not anonymous Reel clicks)
 - [ ] Collect qualitative feedback (confusing fields, wrong verdicts)
 - [ ] Fix top 2–3 pain points in engine or UI
 - [ ] Note 1–2 metrics you can cite (checks completed, decision mix)
 
 **Done when:** Metrics + qualitative feedback you can speak to.  
-**Out:** Growth hacking; paid ads.
+**Out:** Paid ads; counting views as users; recruiting before Phase U is shipped.
 
 ---
 
@@ -386,15 +469,19 @@ Interview window: **Dec 2025 / Jan 2026**. Work engine-first.
 
 ---
 
-## 8. Next up (after Phase A)
+## 8. Next up
 
-Phase A practical path is largely complete. Focus:
+Engine (A–D) is deep enough to demo. The form is not a tool yet. **Next: Phase U, in order U1 → U7.**
 
-1. Finish A cleanup: one `money.ts`; `DECISIONS.md` cents entry  
-2. Phase B1: extract metrics  
-3. Phase B2–B4: `Rule` interface → rules → policy + `risky`  
-4. Phase B6 smoke + start a few real Vitest cases (feeds D)  
-5. `DECISIONS.md`: rule engine vs god function; four-way policy  
+1. U1 — defaults at the edge (engine untouched)  
+2. U2 — `localStorage` profile  
+3. U3 — setup vs check screens  
+4. U4 — phone hot path + screenshot verdict + A2HS prompt  
+5. U5 — `/?price=`  
+6. U6 — deploy; you use the check screen for real buys  
+7. U7 / Phase F — 5–10 named people with a real purchase this week  
+
+Do not start auth (G), AI (H), or Reels-as-acquisition until a return visit is price + button.  
 
 ---
 
@@ -405,6 +492,8 @@ Phase A practical path is largely complete. Focus:
 - Custom “senior” infra without load  
 - Hollow fields (`affordabilityScore` alias, unused category, placeholder reasons) — implement or delete  
 - Empty stub folders as fake architecture  
+- Reels / content as user acquisition before Phase U is shipped  
+- Auth before anyone returns to a price-only check  
 
 ---
 
@@ -414,8 +503,9 @@ Phase A practical path is largely complete. Focus:
 - [ ] Decisions: `yes | wait | risky | no` + `riskFactors[]`  
 - [ ] Vitest: broad edge coverage; deterministic  
 - [ ] Form → API → verdict works end to end  
+- [ ] Phase U: setup once, then price-only return; profile in `localStorage`  
 - [ ] Deployed on Vercel  
-- [ ] Used for personal finances; 5+ external users completed a check  
+- [ ] Used for personal finances; 5+ named external users completed a check  
 - [ ] AI explanation (optional but recommended) with math/AI separation  
 - [ ] Accounts + history (recommended)  
 - [ ] DECISIONS.md: 10+ honest entries  

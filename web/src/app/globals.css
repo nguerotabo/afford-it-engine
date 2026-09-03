@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f6f2;
-  --foreground: #14201a;
-  --muted: #4a5c52;
-  --surface: rgba(255, 255, 255, 0.72);
-  --line: rgba(20, 32, 26, 0.12);
-  --accent: #0f6e56;
-  --accent-soft: #d8f3e7;
-  --yes: #0f6e56;
-  --wait: #9a6700;
-  --risky: #9a6700;
-  --no: #a32d2d;
-  --glow: #b9e4cf;
+  --background: #ffffff;
+  --foreground: #111111;
+  --muted: #6b6b6b;
+  --surface: #ffffff;
+  --line: #111111;
+  --accent: #111111;
+  --yes: #111111;
+  --wait: #6f5d3a;
+  --risky: #8a5a12;
+  --no: #8f2d2d;
+  --grid: rgba(17, 17, 17, 0.06);
+  --sketch: #3a3a3a;
 }
 
 @theme inline {
@@ -22,56 +22,24 @@
   --color-surface: var(--surface);
   --color-line: var(--line);
   --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
   --color-yes: var(--yes);
   --color-wait: var(--wait);
+  --color-risky: var(--risky);
   --color-no: var(--no);
-  --font-sans: var(--font-body);
+  --font-sans: var(--font-display);
   --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+  --font-sketch: var(--font-sketch);
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-body), system-ui, sans-serif;
-}
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes soft-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.04);
-  }
-}
-
-.animate-rise {
-  animation: rise-in 0.55s ease-out both;
-}
-
-.animate-rise-delay {
-  animation: rise-in 0.65s ease-out 0.08s both;
-}
-
-.bg-atmosphere {
-  background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, var(--glow), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 90% 0%, #e8f0ff, transparent 50%),
-    linear-gradient(180deg, #f7faf6 0%, #eef3ec 45%, #e7eee8 100%);
+  font-family: var(--font-display), system-ui, sans-serif;
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 .decision-yes {
@@ -88,4 +56,263 @@ body {
 
 .decision-no {
   color: var(--no);
+}
+
+@keyframes analysis-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.analysis-in {
+  animation: analysis-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.analysis-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.analysis-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.analysis-delay-3 {
+  animation-delay: 0.38s;
+}
+
+@keyframes sketch-draw {
+  from {
+    stroke-dashoffset: 120;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes sketch-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes sketch-wiggle {
+  0%,
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(4deg) translateY(-2px);
+  }
+}
+
+@keyframes sketch-wiggle-slow {
+  0%,
+  100% {
+    transform: rotate(2deg);
+  }
+  50% {
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes sketch-twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(-6deg);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08) rotate(4deg);
+    opacity: 1;
+  }
+}
+
+.sketch-draw path {
+  stroke-dasharray: 120;
+}
+
+.sketch-wiggle {
+  animation: sketch-wiggle 3.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.sketch-wiggle-slow {
+  animation: sketch-wiggle-slow 4.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.sketch-twinkle {
+  animation: sketch-twinkle 2.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stage-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.stage-reveal.is-visible {
+  animation: stage-in 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Touch phones only: never gate content behind scroll animation */
+@media (hover: none) and (pointer: coarse) {
+  .stage-reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .stage-reveal.is-visible {
+    animation: none;
+  }
+
+  .sketch-gated {
+    opacity: 1;
+  }
+}
+
+/* Doodles only draw once their stage is on screen */
+.sketch-gated {
+  opacity: 0;
+}
+
+.stage-reveal.is-visible .sketch-gated {
+  opacity: 1;
+}
+
+.stage-reveal.is-visible .sketch-gated .sketch-pop {
+  animation: sketch-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stage-reveal.is-visible .sketch-gated .sketch-draw path {
+  stroke-dasharray: 120;
+  animation: sketch-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Analysis panel: doodles play on mount (no scroll gate) */
+.sketch-on-mount {
+  opacity: 1;
+}
+
+.sketch-on-mount .sketch-pop {
+  animation: sketch-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sketch-on-mount .sketch-draw path {
+  stroke-dasharray: 120;
+  animation: sketch-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sketch-stagger-1 .sketch-pop,
+.sketch-stagger-1 .sketch-draw path {
+  animation-delay: 0.05s;
+}
+
+.sketch-stagger-2 .sketch-pop,
+.sketch-stagger-2 .sketch-draw path {
+  animation-delay: 0.18s;
+}
+
+.sketch-stagger-3 .sketch-pop,
+.sketch-stagger-3 .sketch-draw path {
+  animation-delay: 0.32s;
+}
+
+@keyframes btn-press-settle {
+  0% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.btn-check {
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.btn-check:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.btn-check.is-pending {
+  transform: scale(0.96);
+  opacity: 0.65;
+  letter-spacing: 0.04em;
+}
+
+.btn-check.is-settling {
+  animation: btn-press-settle 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.meter-fill {
+  width: 0%;
+  transition: width 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.meter-fill.is-grown {
+  /* width set inline */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-in,
+  .sketch-draw path,
+  .sketch-pop,
+  .sketch-wiggle,
+  .sketch-wiggle-slow,
+  .sketch-twinkle,
+  .stage-reveal.is-visible,
+  .stage-reveal.is-visible .sketch-gated .sketch-pop,
+  .stage-reveal.is-visible .sketch-gated .sketch-draw path,
+  .sketch-on-mount .sketch-pop,
+  .sketch-on-mount .sketch-draw path,
+  .btn-check.is-settling {
+    animation: none;
+  }
+
+  .stage-reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .sketch-gated {
+    opacity: 1;
+  }
+
+  .sketch-draw path {
+    stroke-dasharray: none;
+  }
+
+  .meter-fill {
+    transition: none;
+  }
 }

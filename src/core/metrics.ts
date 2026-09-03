@@ -1,6 +1,6 @@
 import { convertToCents } from "./money";
 import type { AffordabilityInput } from "./types";
-import { normalizeToPaycheque, calculatePaychequesNeeded, calculateSuggestedPurchaseDate } from "./utils";
+import { normalizeToPaycheque, calculatePaychequesNeeded, calculateSuggestedPurchaseDate, paychequesUntil } from "./utils";
 
 
 export type Metrics = {
@@ -10,6 +10,7 @@ export type Metrics = {
     paychequeImpact: number;
     totalImpact: number;
     paychequesNeeded: number;
+    paychequesUntilDesired: number;
     earliestAffordableDate: Date;
 }
 
@@ -17,35 +18,45 @@ export function calculateMetrics(input: AffordabilityInput): Metrics {
     let {
       purchasePrice,
       expenses,
-      savingsCommitment,
       currentSavings,
       minimumBuffer,
       paycheque,
       paychequeFrequency,
       expensesFrequency,
-      savingsCommitmentFrequency,
     } = input;
 
     purchasePrice = convertToCents(purchasePrice);
     expenses = convertToCents(expenses);
-    savingsCommitment = convertToCents(savingsCommitment);
     currentSavings = convertToCents(currentSavings);
     minimumBuffer = convertToCents(minimumBuffer);
     paycheque = convertToCents(paycheque);
 
-  
-    // Normalizing expenses + savings to user's chosen paycheque cycle
-    const normalizedExpenses = Math.round(normalizeToPaycheque(expenses, expensesFrequency, paychequeFrequency));
-    const normalizedSavings = Math.round(normalizeToPaycheque(savingsCommitment, savingsCommitmentFrequency, paychequeFrequency));
-  
+    // Savings commitment is plan-into-cash, not a second sink (would double-count).
+    const normalizedExpenses = Math.round(
+      normalizeToPaycheque(expenses, expensesFrequency, paychequeFrequency),
+    );
+
     // Core calculations
-    let freeCashFlowPerPaycheque = paycheque - normalizedExpenses - normalizedSavings;
+    let freeCashFlowPerPaycheque = paycheque - normalizedExpenses;
     let safeToSpend = currentSavings - minimumBuffer;
-    let remainingAfter = safeToSpend + freeCashFlowPerPaycheque - purchasePrice; // >= 0 => affordable now, buffer intact
+
+    // Periods that land before/on the desired date. 0 = buy today (this paycheque not yet in cash).
+    const paychequesUntilDesired = paychequesUntil(
+      new Date(),
+      input.desiredPurchaseDate,
+      paychequeFrequency,
+    );
+
+    // N = 0: this paycheque's FCF can fund the buy. N >= 1: those cheques are already in the pile.
+    const accumulatedFcf =
+      paychequesUntilDesired <= 0
+        ? freeCashFlowPerPaycheque
+        : paychequesUntilDesired * freeCashFlowPerPaycheque;
+    let remainingAfter = safeToSpend + accumulatedFcf - purchasePrice;
 
     // Derived metrics
     const paychequeImpact = paycheque > 0 ? purchasePrice / paycheque : Infinity;
-    const totalAvailable = safeToSpend + freeCashFlowPerPaycheque;
+    const totalAvailable = safeToSpend + accumulatedFcf;
     const totalImpact = totalAvailable > 0 ? purchasePrice / totalAvailable : Infinity;
 
     const paychequesNeeded = calculatePaychequesNeeded(
@@ -67,6 +78,7 @@ export function calculateMetrics(input: AffordabilityInput): Metrics {
       paychequeImpact,
       totalImpact,
       paychequesNeeded,
+      paychequesUntilDesired,
       earliestAffordableDate,
     };
 }
