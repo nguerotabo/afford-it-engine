@@ -5,9 +5,10 @@ export class paychequeImpactRule implements Rule {
 
     // Evaluate the paycheque impact rule
     evaluate(context: EvaluationContext): RuleResult {
-        const {paychequeImpact} = context.metrics;
+        const { paychequeImpact, paychequesUntilDesired } = context.metrics;
 
-        if (paychequeImpact <= 1) {
+        // Large vs one cheque only matters if this buy hits the current period.
+        if (paychequesUntilDesired > 0 || paychequeImpact <= 1) {
             return {
                 severity: "ok",
                 factor: "The paycheque impact is acceptable.",

@@ -11,6 +11,14 @@ describe("paychequeImpactRule: ok", () => {
     expect(result.severity).toBe("ok");
     expect(result.factor).toBe("The paycheque impact is acceptable.");
   });
+
+  test("high impact is ignored when the buy is after the current period", () => {
+    const result = rule.evaluate(
+      ruleContext({ paychequeImpact: 6, paychequesUntilDesired: 5 }),
+    );
+
+    expect(result.severity).toBe("ok");
+  });
 });
 
 describe("paychequeImpactRule: warn", () => {

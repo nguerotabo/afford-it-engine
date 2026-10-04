@@ -1,6 +1,6 @@
 import { expect, test, describe } from "vitest";
 import { calculateMetrics } from "../src/core/metrics";
-import { baseInput, daysFromNow } from "./helpers";
+import { baseInput, daysFromNow, today } from "./helpers";
 
 describe("calculateMetrics (values in cents)", () => {
   test("baseline weekly inputs", () => {
@@ -36,7 +36,7 @@ describe("calculateMetrics (values in cents)", () => {
 
   test("normalizes monthly expenses into weekly paycheque cycle", () => {
     // $200/month → annual $2400 → weekly ≈ $46.15 → 4615 cents after round
-    // FCF = 50000 - 4615 - 25000 = 20385
+    // FCF = 50000 - 4615 = 45385 (savings commitment ignored)
     const metrics = calculateMetrics(
       baseInput({
         expenses: 200,
@@ -45,21 +45,33 @@ describe("calculateMetrics (values in cents)", () => {
       }),
     );
 
-    expect(metrics.freeCashFlowPerPaycheque).toBe(20_385);
+    expect(metrics.freeCashFlowPerPaycheque).toBe(45_385);
   });
 
   test("zero FCF with shortfall → infinite paychequesNeeded", () => {
     const metrics = calculateMetrics(
       baseInput({
         paycheque: 300,
-        expenses: 50,
-        savingsCommitment: 250,
+        expenses: 300,
         purchasePrice: 5000,
       }),
     );
 
     expect(metrics.freeCashFlowPerPaycheque).toBe(0);
     expect(metrics.paychequesNeeded).toBe(Infinity);
+  });
+
+  test("savings commitment does not reduce FCF", () => {
+    const without = calculateMetrics(
+      baseInput({ savingsCommitment: 0, purchasePrice: 1000 }),
+    );
+    const withPlan = calculateMetrics(
+      baseInput({ savingsCommitment: 250, purchasePrice: 1000 }),
+    );
+
+    expect(withPlan.freeCashFlowPerPaycheque).toBe(
+      without.freeCashFlowPerPaycheque,
+    );
   });
 
   test("zero paycheque → infinite paychequeImpact", () => {
@@ -97,5 +109,22 @@ describe("calculateMetrics (values in cents)", () => {
       b.earliestAffordableDate.getTime(),
     );
     expect(a.paychequesNeeded).toBe(b.paychequesNeeded);
+  });
+
+  test("remainingAfter accumulates FCF through the desired date", () => {
+    const now = calculateMetrics(
+      baseInput({ purchasePrice: 5000, desiredPurchaseDate: today() }),
+    );
+    const later = calculateMetrics(
+      baseInput({
+        purchasePrice: 5000,
+        desiredPurchaseDate: daysFromNow(70),
+      }),
+    );
+
+    expect(now.remainingAfter).toBe(-180_000);
+    expect(later.paychequesUntilDesired).toBe(10);
+    expect(later.remainingAfter).toBe(now.safeToSpend + 10 * now.freeCashFlowPerPaycheque - 500_000);
+    expect(later.remainingAfter).toBeGreaterThan(now.remainingAfter);
   });
 });

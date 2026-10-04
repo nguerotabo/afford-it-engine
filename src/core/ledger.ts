@@ -7,15 +7,28 @@ export type Ledger = {
     currentSavings: number;
 };
 
+function nowCash(input: AffordabilityInput, metrics: Metrics): number {
+    const minimumBuffer = convertToCents(input.minimumBuffer);
+    return metrics.safeToSpend + minimumBuffer;
+}
+
+function cashAtDesiredDate(input: AffordabilityInput, metrics: Metrics): number {
+    return (
+        nowCash(input, metrics) +
+        metrics.freeCashFlowPerPaycheque * metrics.paychequesUntilDesired
+    );
+}
+
 export function calculateBeforeLedger(
     input: AffordabilityInput,
     metrics: Metrics,
 ): Ledger {
     const minimumBuffer = convertToCents(input.minimumBuffer);
+    const currentSavings = nowCash(input, metrics);
 
     return {
-        currentSavings: metrics.safeToSpend + minimumBuffer,
-        safeToSpend: metrics.safeToSpend,
+        currentSavings,
+        safeToSpend: currentSavings - minimumBuffer,
     };
 }
 
@@ -25,13 +38,17 @@ export function calculateAfterLedger(
 ): Ledger {
     const minimumBuffer = convertToCents(input.minimumBuffer);
     const purchasePrice = convertToCents(input.purchasePrice);
-    const currentSavings = metrics.safeToSpend + minimumBuffer;
+    const projectedCash = cashAtDesiredDate(input, metrics);
     const fcf = metrics.freeCashFlowPerPaycheque;
+    const n = metrics.paychequesUntilDesired;
 
-    const fromFcf = Math.min(purchasePrice, Math.max(0, fcf));
-    const fromSavings = purchasePrice - fromFcf;
+    // Today: this paycheque is not in cash yet — FCF-first. Later: FCF already in the pile.
+    const fromSavings =
+        n <= 0
+            ? purchasePrice - Math.min(purchasePrice, Math.max(0, fcf))
+            : purchasePrice;
 
-    const afterCash = currentSavings - fromSavings;
+    const afterCash = projectedCash - fromSavings;
     const afterSafe = afterCash - minimumBuffer;
 
     return {

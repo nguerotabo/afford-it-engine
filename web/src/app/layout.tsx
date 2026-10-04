@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope, Roboto_Condensed } from "next/font/google";
+import { Inter, IBM_Plex_Mono, Caveat } from "next/font/google";
+import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
-const display = Roboto_Condensed({
+const sans = Inter({
   variable: "--font-display",
   subsets: ["latin"],
 });
 
-const body = Manrope({
-  variable: "--font-body",
+const mono = IBM_Plex_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
+});
+
+const sketch = Caveat({
+  variable: "--font-sketch",
+  subsets: ["latin"],
+  weight: ["500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -24,8 +32,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+    <html
+      lang="en"
+      className={`${sans.variable} ${mono.variable} ${sketch.variable} h-full`}
+    >
+      <body className="min-h-full antialiased">
+        <SiteHeader />
+        {children}
+      </body>
     </html>
   );
 }

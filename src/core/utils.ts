@@ -1,5 +1,62 @@
 import type { frequency } from "./types";
 
+/** Local calendar day at 00:00. Date-only compares must not carry clock time. */
+export function startOfLocalDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+export function isOnOrBeforeCalendarDay(a: Date, b: Date): boolean {
+    return startOfLocalDay(a).getTime() <= startOfLocalDay(b).getTime();
+}
+
+function localDayDiff(from: Date, to: Date): number {
+    const start = startOfLocalDay(from);
+    const end = startOfLocalDay(to);
+    return Math.round((end.getTime() - start.getTime()) / 86_400_000);
+}
+
+/** How many pay periods elapse from `from` to `to` (0 if `to` is today or earlier). */
+export function paychequesUntil(
+    from: Date,
+    to: Date,
+    paychequeFrequency: frequency,
+): number {
+    if (startOfLocalDay(to).getTime() <= startOfLocalDay(from).getTime()) {
+        return 0;
+    }
+
+    switch (paychequeFrequency) {
+        case "weekly":
+            return Math.floor(localDayDiff(from, to) / 7);
+        case "biweekly":
+            return Math.floor(localDayDiff(from, to) / 14);
+        case "monthly": {
+            const start = startOfLocalDay(from);
+            const end = startOfLocalDay(to);
+            let months =
+                (end.getFullYear() - start.getFullYear()) * 12 +
+                (end.getMonth() - start.getMonth());
+            if (end.getDate() < start.getDate()) {
+                months -= 1;
+            }
+            return Math.max(0, months);
+        }
+        case "yearly": {
+            const start = startOfLocalDay(from);
+            const end = startOfLocalDay(to);
+            let years = end.getFullYear() - start.getFullYear();
+            if (
+                end.getMonth() < start.getMonth() ||
+                (end.getMonth() === start.getMonth() &&
+                    end.getDate() < start.getDate())
+            ) {
+                years -= 1;
+            }
+            return Math.max(0, years);
+        }
+    }
+}
+
 // Helper Function: Converts any number to match the user's paycheque cycle
 
 export function normalizeToPaycheque(amount: number, currentFreq: string, targetFreq: string): number {
@@ -42,7 +99,7 @@ export function calculateSuggestedPurchaseDate(
     paychequeFrequency: frequency,
     fromDate: Date = new Date(),
 ): Date {
-    const suggested = new Date(fromDate);
+    const suggested = startOfLocalDay(fromDate);
 
     if (!Number.isFinite(paychequesNeeded) || paychequesNeeded <= 0) {
         return suggested;

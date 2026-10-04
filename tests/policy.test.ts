@@ -47,7 +47,7 @@ describe("applyPolicy", () => {
     expect(out.riskFactors).toEqual(["The paycheque impact is quite high."]);
   });
 
-  test("buffer block + timing ok → wait", () => {
+  test("buffer block → no (wait unused in v1)", () => {
     const input = baseInput({
       purchasePrice: 5000,
       desiredPurchaseDate: daysFromNow(365),
@@ -62,7 +62,7 @@ describe("applyPolicy", () => {
       }),
     );
 
-    expect(out.decision).toBe("wait");
+    expect(out.decision).toBe("no");
     expect(out.suggestedPurchaseDate).toEqual(metrics.earliestAffordableDate);
   });
 

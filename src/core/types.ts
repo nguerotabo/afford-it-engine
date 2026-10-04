@@ -8,7 +8,7 @@ export type AffordabilityInput = {
     purchasePrice: number;
     desiredPurchaseDate: Date; // have suggestedPurchaseDate in output. 
     purchaseCategory: PurchaseCategory;
-    savingsCommitment: number; // create subtype for weekly, monthly, yearly. Allow user to input any frequency.
+    savingsCommitment: number; // plan into cash; not subtracted from FCF
     savingsCommitmentFrequency: frequency
 }
 
@@ -27,11 +27,11 @@ export type AffordabilityOutput = {
     decision: Decision;
     reason: string;
     suggestedPurchaseDate: Date;
+    earliestAffordableDate: Date;
     safeToSpend: number;
     paychequesNeeded: number;
     totalImpact: number;
     paychequeImpact: number;
-    affordabilityScore: number;
     remainingAfter: number; 
     freeCashFlow: number;
     purchaseCategory: PurchaseCategory;

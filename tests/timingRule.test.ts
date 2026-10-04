@@ -9,7 +9,25 @@ describe("timingRule: ok", () => {
     const result = rule.evaluate(ruleContext({ remainingAfter: 1000 }));
 
     expect(result.severity).toBe("ok");
-    expect(result.factor).toBe("Purchase is covered now; timing not required.");
+    expect(result.factor).toBe(
+      "Purchase is covered by the desired date; timing not required.",
+    );
+  });
+
+  test("same local calendar day still within reach despite later clock time", () => {
+    const result = rule.evaluate(
+      ruleContext(
+        {
+          remainingAfter: -1000,
+          paychequesNeeded: 5,
+          earliestAffordableDate: new Date(2026, 9, 22, 22, 42),
+        },
+        { desiredPurchaseDate: new Date(2026, 9, 22) },
+      ),
+    );
+
+    expect(result.severity).toBe("ok");
+    expect(result.factor).toBe("The desired purchase date is within reach.");
   });
 
   test("shortfall but earliest date is on or before desired date", () => {

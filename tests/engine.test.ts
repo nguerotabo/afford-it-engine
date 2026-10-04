@@ -1,11 +1,12 @@
 import { expect, test, describe } from "vitest";
 import { evaluateAffordability } from "../src/core/engine";
-import { baseInput, daysFromNow } from "./helpers";
+import { parseAffordabilityInput } from "../src/core/parseInput";
+import { baseInput, daysFromNow, today } from "./helpers";
 
 describe("decision: yes", () => {
   test("affordable now with low paycheque impact", () => {
     // impact = 400/500 = 0.8 ≤ 1 → no impact warn; wants → yes
-    const desiredPurchaseDate = new Date("2026-10-30");
+    const desiredPurchaseDate = today();
     const output = evaluateAffordability(
       baseInput({ purchasePrice: 400, desiredPurchaseDate }),
     );
@@ -66,7 +67,25 @@ describe("decision: risky", () => {
     expect(output.riskFactors).toContain("The paycheque impact is quite high.");
   });
 
-  test("covered but luxury category", () => {
+  test("covered but luxury with thin cushion", () => {
+    // High expenses → 2-month cushion bar is high; price still leaves remainingAfter ≥ 0
+    // and impact ≤ 1 so only luxury warns.
+    const output = evaluateAffordability(
+      baseInput({
+        paycheque: 2500,
+        expenses: 2000,
+        purchasePrice: 400,
+        purchaseCategory: "luxury",
+      }),
+    );
+
+    expect(output.decision).toBe("risky");
+    expect(output.riskFactors).toEqual([
+      "Luxury purchase — thin cushion after the buy.",
+    ]);
+  });
+
+  test("luxury with comfortable cushion → yes", () => {
     const output = evaluateAffordability(
       baseInput({
         purchasePrice: 400,
@@ -74,8 +93,9 @@ describe("decision: risky", () => {
       }),
     );
 
-    expect(output.decision).toBe("risky");
-    expect(output.riskFactors).toContain("Luxury purchase — higher risk bar.");
+    // remainingAfter 2800 ≥ ~2 months of $300/week expenses
+    expect(output.decision).toBe("yes");
+    expect(output.riskFactors).toEqual([]);
   });
 
   test("exact boundary remainingAfter === 0 with high impact → risky", () => {
@@ -87,8 +107,8 @@ describe("decision: risky", () => {
   });
 });
 
-describe("decision: wait", () => {
-  test("shortfall reachable before desired date", () => {
+describe("decision: reachable by desired date", () => {
+  test("shortfall today but covered by desired date → yes", () => {
     const output = evaluateAffordability(
       baseInput({
         purchasePrice: 5000,
@@ -96,16 +116,52 @@ describe("decision: wait", () => {
       }),
     );
 
-    expect(output.decision).toBe("wait");
+    expect(output.decision).toBe("yes");
     expect(output.paychequesNeeded).toBe(10);
-    expect(output.remainingAfter).toBe(-1800);
+    expect(output.remainingAfter).toBeGreaterThanOrEqual(0);
     expect(output.freeCashFlow).toBe(200);
-    expect(output.suggestedPurchaseDate.getTime()).toBeLessThan(
-      daysFromNow(365).getTime(),
-    );
+    expect(output.riskFactors).toEqual([]);
   });
 
-  test("one cent under affordable still waits when date allows", () => {
+  test("resubmitting earliest as YYYY-MM-DD is covered, not no", () => {
+    const first = evaluateAffordability(
+      baseInput({
+        purchasePrice: 5000,
+        desiredPurchaseDate: daysFromNow(365),
+      }),
+    );
+    expect(first.decision).toBe("yes");
+    expect(first.remainingAfter).toBeGreaterThanOrEqual(0);
+
+    const earliest = first.earliestAffordableDate;
+    const dateOnly = [
+      earliest.getFullYear(),
+      String(earliest.getMonth() + 1).padStart(2, "0"),
+      String(earliest.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    const parsed = parseAffordabilityInput({
+      paycheque: 500,
+      paychequeFrequency: "weekly",
+      expenses: 300,
+      expensesFrequency: "weekly",
+      currentSavings: 5000,
+      minimumBuffer: 2000,
+      purchasePrice: 5000,
+      desiredPurchaseDate: dateOnly,
+      purchaseCategory: "wants",
+      savingsCommitment: 250,
+      savingsCommitmentFrequency: "weekly",
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const second = evaluateAffordability(parsed.input);
+    expect(second.decision).not.toBe("no");
+    expect(second.remainingAfter).toBeGreaterThanOrEqual(0);
+  });
+
+  test("one cent under today still covered when the date allows", () => {
     const output = evaluateAffordability(
       baseInput({
         purchasePrice: 3200.01,
@@ -113,9 +169,22 @@ describe("decision: wait", () => {
       }),
     );
 
-    expect(output.decision).toBe("wait");
+    expect(output.decision).toBe("yes");
     expect(output.paychequesNeeded).toBe(2);
-    expect(output.remainingAfter).toBeCloseTo(-0.01, 2);
+    expect(output.remainingAfter).toBeGreaterThan(0);
+  });
+
+  test("luxury with comfortable cushion far out → yes", () => {
+    const output = evaluateAffordability(
+      baseInput({
+        purchasePrice: 400,
+        purchaseCategory: "luxury",
+        desiredPurchaseDate: daysFromNow(365),
+      }),
+    );
+
+    expect(output.decision).toBe("yes");
+    expect(output.riskFactors).toEqual([]);
   });
 });
 
@@ -139,8 +208,7 @@ describe("decision: no", () => {
     const desiredPurchaseDate = daysFromNow(365);
     const output = evaluateAffordability(
       baseInput({
-        expenses: 400,
-        savingsCommitment: 200,
+        expenses: 600,
         purchasePrice: 5000,
         desiredPurchaseDate,
       }),
@@ -156,8 +224,7 @@ describe("decision: no", () => {
   test("zero FCF with shortfall → no", () => {
     const output = evaluateAffordability(
       baseInput({
-        expenses: 250,
-        savingsCommitment: 250,
+        expenses: 500,
         purchasePrice: 5000,
         desiredPurchaseDate: daysFromNow(365),
       }),
@@ -183,7 +250,7 @@ describe("decision: no", () => {
 });
 
 describe("frequency normalization in engine", () => {
-  test("monthly expenses normalize into weekly paycheque cycle", () => {
+  test("yearly expenses normalize into weekly paycheque cycle; savings ignored", () => {
     const output = evaluateAffordability(
       baseInput({
         expenses: 5200,
@@ -194,11 +261,12 @@ describe("frequency normalization in engine", () => {
       }),
     );
 
-    expect(output.freeCashFlow).toBe(150);
+    // weekly expenses = 100; FCF = 500 - 100 = 400
+    expect(output.freeCashFlow).toBe(400);
     expect(output.decision).toBe("yes");
   });
 
-  test("biweekly paycheque with weekly expenses", () => {
+  test("biweekly paycheque with weekly expenses; savings ignored", () => {
     const output = evaluateAffordability(
       baseInput({
         paycheque: 1000,
@@ -211,7 +279,8 @@ describe("frequency normalization in engine", () => {
       }),
     );
 
-    expect(output.freeCashFlow).toBe(700);
+    // biweekly expenses = 100; FCF = 1000 - 100 = 900
+    expect(output.freeCashFlow).toBe(900);
     expect(output.decision).toBe("yes");
   });
 });
@@ -257,13 +326,13 @@ describe("edge cases", () => {
         currentSavings: -500,
         minimumBuffer: 0,
         purchasePrice: 100,
-        desiredPurchaseDate: daysFromNow(365),
+        desiredPurchaseDate: today(),
       }),
     );
 
     expect(output.safeToSpend).toBe(-500);
     expect(output.remainingAfter).toBe(-400);
-    expect(output.decision).toBe("wait");
+    expect(output.decision).toBe("no");
     expect(output.paychequesNeeded).toBe(3);
   });
 
@@ -273,12 +342,12 @@ describe("edge cases", () => {
         currentSavings: 1000,
         minimumBuffer: 2000,
         purchasePrice: 100,
-        desiredPurchaseDate: daysFromNow(365),
+        desiredPurchaseDate: today(),
       }),
     );
 
     expect(output.safeToSpend).toBe(-1000);
-    expect(output.decision).toBe("wait");
+    expect(output.decision).toBe("no");
   });
 
   test("zero purchase price → yes", () => {
@@ -314,15 +383,17 @@ describe("invariants", () => {
     expect(output.riskFactors.length).toBeGreaterThan(0);
   });
 
-  test("wait ⇒ finite paychequesNeeded > 0 and remainingAfter < 0", () => {
+  test("shortfall today with desired = today → no (not wait)", () => {
     const output = evaluateAffordability(
       baseInput({
-        purchasePrice: 5000,
-        desiredPurchaseDate: daysFromNow(365),
+        currentSavings: -500,
+        minimumBuffer: 0,
+        purchasePrice: 100,
+        desiredPurchaseDate: today(),
       }),
     );
 
-    expect(output.decision).toBe("wait");
+    expect(output.decision).toBe("no");
     expect(output.remainingAfter).toBeLessThan(0);
     expect(output.paychequesNeeded).toBeGreaterThan(0);
     expect(Number.isFinite(output.paychequesNeeded)).toBe(true);
@@ -344,11 +415,6 @@ describe("invariants", () => {
     expect(a.paychequeImpact).toBe(b.paychequeImpact);
     expect(a.totalImpact).toBe(b.totalImpact);
     expect(a.riskFactors).toEqual(b.riskFactors);
-  });
-
-  test("affordabilityScore mirrors paychequeImpact", () => {
-    const output = evaluateAffordability(baseInput({ purchasePrice: 250 }));
-    expect(output.affordabilityScore).toBe(output.paychequeImpact);
   });
 });
 
@@ -387,7 +453,7 @@ describe("what-if ledger", () => {
     expect(risky.after.currentSavings).not.toBe(yes.after.currentSavings);
   });
 
-  test("no: still shows after-state if purchase applied now", () => {
+  test("no: still shows after-state if purchase applied on the desired date", () => {
     const output = evaluateAffordability(
       baseInput({
         purchasePrice: 10_000,
@@ -405,5 +471,39 @@ describe("what-if ledger", () => {
     expect(output.after.currentSavings).toBeLessThan(
       output.before.currentSavings,
     );
+  });
+
+  test("projects cash to the desired date on after; before stays what the user entered", () => {
+    const output = evaluateAffordability(
+      baseInput({
+        purchasePrice: 150,
+        desiredPurchaseDate: daysFromNow(14),
+      }),
+    );
+
+    expect(output.decision).toBe("yes");
+    expect(output.before).toEqual({
+      currentSavings: 5000,
+      safeToSpend: 3000,
+    });
+    // 2 weekly cheques of FCF 200, then −150
+    expect(output.after).toEqual({
+      currentSavings: 5250,
+      safeToSpend: 3250,
+    });
+  });
+
+  test("negative FCF shrinks after-cash by the desired date; before stays now", () => {
+    const output = evaluateAffordability(
+      baseInput({
+        expenses: 600,
+        purchasePrice: 0,
+        desiredPurchaseDate: daysFromNow(14),
+      }),
+    );
+
+    expect(output.freeCashFlow).toBe(-100);
+    expect(output.before.currentSavings).toBe(5000);
+    expect(output.after.currentSavings).toBe(4800);
   });
 });

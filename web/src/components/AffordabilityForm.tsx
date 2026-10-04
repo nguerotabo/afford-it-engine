@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Decision, frequency } from "@/lib/engine";
+import { SketchMark } from "@/components/SketchMarks";
+import {
+  HIDDEN_DEFAULTS,
+  SETUP_DEFAULTS,
+  clearMoneyProfile,
+  loadMoneyProfile,
+  saveMoneyProfile,
+  todayLocalISO,
+  type MoneyProfile,
+} from "@/lib/profile";
 
 type LedgerSnapshot = {
   currentSavings: number;
@@ -10,67 +20,193 @@ type LedgerSnapshot = {
 
 type EvaluateResult = {
   decision: Decision;
-  reason: string;
   suggestedPurchaseDate: string;
-  safeToSpend: number;
+  earliestAffordableDate: string;
+  desiredPurchaseDate: string;
   paychequesNeeded: number | null;
-  totalImpact: number | null;
-  paychequeImpact: number | null;
-  affordabilityScore: number | null;
-  remainingAfter: number;
   freeCashFlow: number;
+  riskFactors: string[];
   before: LedgerSnapshot;
   after: LedgerSnapshot;
 };
 
-const FREQUENCIES: frequency[] = ["weekly", "biweekly", "monthly", "yearly"];
+const FREQUENCIES: { value: frequency; label: string }[] = [
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Biweekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+];
+
+const frequencyLabel: Record<frequency, string> = {
+  weekly: "weekly",
+  biweekly: "biweekly",
+  monthly: "monthly",
+  yearly: "yearly",
+};
 
 const money = (n: number) =>
-  n.toLocaleString(undefined, {
-    style: "currency",
-    currency: "CAD",
-    maximumFractionDigits: 3,
-  });
-
-const pct = (ratio: number | null) =>
-  ratio == null ? "—" : `${(ratio * 100).toFixed(0)}%`;
+  `$${n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const decisionLabel: Record<Decision, string> = {
   yes: "Yes — you can buy this",
   wait: "Wait — save a bit first",
-  risky: "Risky - covered, but watch the warnings",
+  risky: "Risky — covered, but watch the warnings",
   no: "No — not by that date",
 };
 
+type Screen = "boot" | "setup" | "check";
+
+type SetupDraft = {
+  currentSavings: string;
+  paycheque: string;
+  paychequeFrequency: frequency;
+  expenses: string;
+  expensesFrequency: frequency;
+};
+
+const emptyDraft = (): SetupDraft => ({
+  currentSavings: "",
+  paycheque: "",
+  paychequeFrequency: SETUP_DEFAULTS.paychequeFrequency,
+  expenses: "",
+  expensesFrequency: SETUP_DEFAULTS.expensesFrequency,
+});
+
+function draftFromProfile(profile: MoneyProfile): SetupDraft {
+  return {
+    currentSavings: String(profile.currentSavings),
+    paycheque: String(profile.paycheque),
+    paychequeFrequency: profile.paychequeFrequency,
+    expenses: String(profile.expenses),
+    expensesFrequency: profile.expensesFrequency,
+  };
+}
+
+function parseNonNegative(raw: string): number | null {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    return null;
+  }
+  return n;
+}
+
 export function AffordabilityForm() {
+  const [screen, setScreen] = useState<Screen>("boot");
+  const [profile, setProfile] = useState<MoneyProfile | null>(null);
+  const [draft, setDraft] = useState<SetupDraft>(emptyDraft);
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [desiredPurchaseDate, setDesiredPurchaseDate] = useState("");
   const [result, setResult] = useState<EvaluateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const analysisRef = useRef<HTMLElement>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    const saved = loadMoneyProfile();
+    setProfile(saved);
+    setScreen(saved ? "check" : "setup");
+    setDesiredPurchaseDate(todayLocalISO());
+    if (saved) {
+      setDraft(draftFromProfile(saved));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!result) return;
+    analysisRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [result]);
+
+  useEffect(() => {
+    if (screen !== "check") return;
+    priceRef.current?.focus();
+  }, [screen]);
+
+  useEffect(() => {
+    if (!settling) return;
+    const id = window.setTimeout(() => setSettling(false), 400);
+    return () => window.clearTimeout(id);
+  }, [settling]);
+
+  function openSetup() {
     setError(null);
+    setResult(null);
+    setDraft(profile ? draftFromProfile(profile) : emptyDraft());
+    setScreen("setup");
+  }
+
+  function startOver() {
+    clearMoneyProfile();
+    setProfile(null);
+    setDraft(emptyDraft());
+    setPurchasePrice("");
+    setDesiredPurchaseDate(todayLocalISO());
+    setResult(null);
+    setError(null);
+    setScreen("setup");
+  }
+
+  function onSaveSetup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cash = parseNonNegative(draft.currentSavings);
+    const pay = parseNonNegative(draft.paycheque);
+    const bills = parseNonNegative(draft.expenses);
+
+    if (cash === null || pay === null || bills === null) {
+      setError("Enter cash, paycheck, and bills as numbers 0 or more.");
+      return;
+    }
+
+    const next: MoneyProfile = {
+      currentSavings: cash,
+      paycheque: pay,
+      paychequeFrequency: draft.paychequeFrequency,
+      expenses: bills,
+      expensesFrequency: draft.expensesFrequency,
+    };
+
+    saveMoneyProfile(next);
+    setProfile(next);
+    setError(null);
+    setScreen("check");
+  }
+
+  async function onCheck(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) {
+      setError("Save your money first.");
+      setScreen("setup");
+      return;
+    }
+
+    const price = parseNonNegative(purchasePrice);
+    if (price === null || price <= 0) {
+      setError("Enter a purchase price.");
+      return;
+    }
+
+    const date = desiredPurchaseDate.trim() || todayLocalISO();
+
+    setError(null);
+    setSettling(false);
     setPending(true);
 
-    const form = new FormData(event.currentTarget);
-
     const payload = {
-      paycheque: Number(form.get("paycheque")),
-      paychequeFrequency: String(form.get("paychequeFrequency")) as frequency,
-      expenses: Number(form.get("expenses")),
-      expensesFrequency: String(form.get("expensesFrequency")) as frequency,
-      currentSavings: Number(form.get("currentSavings")),
-      minimumBuffer: Number(form.get("minimumBuffer")),
-      purchasePrice: Number(form.get("purchasePrice")),
-      desiredPurchaseDate: String(form.get("desiredPurchaseDate")),
-      purchaseCategory: String(form.get("purchaseCategory")) as
-        | "wants"
-        | "needs"
-        | "luxury",
-      savingsCommitment: Number(form.get("savingsCommitment")),
-      savingsCommitmentFrequency: String(
-        form.get("savingsCommitmentFrequency"),
-      ) as frequency,
+      paycheque: profile.paycheque,
+      paychequeFrequency: profile.paychequeFrequency,
+      expenses: profile.expenses,
+      expensesFrequency: profile.expensesFrequency,
+      currentSavings: profile.currentSavings,
+      minimumBuffer: HIDDEN_DEFAULTS.minimumBuffer,
+      purchasePrice: price,
+      desiredPurchaseDate: date,
+      purchaseCategory: HIDDEN_DEFAULTS.purchaseCategory,
+      savingsCommitment: HIDDEN_DEFAULTS.savingsCommitment,
+      savingsCommitmentFrequency: HIDDEN_DEFAULTS.savingsCommitmentFrequency,
     };
 
     try {
@@ -87,6 +223,7 @@ export function AffordabilityForm() {
       }
 
       setResult(data);
+      setSettling(true);
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -95,81 +232,170 @@ export function AffordabilityForm() {
     }
   }
 
+  if (screen === "boot") {
+    return <div className="mt-8 min-h-48" />;
+  }
+
+  if (screen === "setup") {
+    return (
+      <div className="mt-8 flex w-full flex-col">
+        <section className="border-t border-foreground/15 py-10">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Your money
+          </h2>
+          <p className="mt-3 max-w-xl text-base leading-relaxed text-muted">
+            Once, on this phone. Paycheck can be biweekly while bills are
+            monthly. Change this later if rent or pay changes.
+          </p>
+
+          <form
+            onSubmit={onSaveSetup}
+            className="mt-8 grid gap-4 sm:grid-cols-2"
+            noValidate
+          >
+            <Field
+              label="Cash in the bank"
+              name="currentSavings"
+              type="number"
+              className="sm:col-span-2"
+              value={draft.currentSavings}
+              onChange={(value) =>
+                setDraft((prev) => ({ ...prev, currentSavings: value }))
+              }
+            />
+            <Field
+              label="Paycheck"
+              name="paycheque"
+              type="number"
+              value={draft.paycheque}
+              onChange={(value) =>
+                setDraft((prev) => ({ ...prev, paycheque: value }))
+              }
+            />
+            <Select
+              label="How often you get paid"
+              name="paychequeFrequency"
+              options={FREQUENCIES}
+              value={draft.paychequeFrequency}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  paychequeFrequency: value as frequency,
+                }))
+              }
+            />
+            <Field
+              label="Bills"
+              name="expenses"
+              type="number"
+              value={draft.expenses}
+              onChange={(value) =>
+                setDraft((prev) => ({ ...prev, expenses: value }))
+              }
+            />
+            <Select
+              label="How often those bills hit"
+              name="expensesFrequency"
+              options={FREQUENCIES}
+              value={draft.expensesFrequency}
+              onChange={(value) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  expensesFrequency: value as frequency,
+                }))
+              }
+            />
+
+            <div className="col-span-full flex flex-wrap items-center gap-4 pt-2">
+              <button
+                type="submit"
+                className="btn-check relative z-10 min-h-12 cursor-pointer touch-manipulation border border-foreground bg-foreground px-5 py-3 text-sm font-medium text-white"
+              >
+                {profile ? "Save money" : "Save and continue"}
+              </button>
+              {profile ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setScreen("check");
+                  }}
+                  className="text-sm text-muted underline-offset-4 hover:underline"
+                >
+                  Cancel
+                </button>
+              ) : null}
+              {error ? <p className="text-sm text-no">{error}</p> : null}
+            </div>
+          </form>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10">
-      <form
-        onSubmit={onSubmit}
-        className="animate-rise-delay grid gap-6 border-t border-line pt-8"
-      >
-        <section className="grid gap-4 sm:grid-cols-2">
-          <Field label="Purchase price" name="purchasePrice" type="number" defaultValue="800" />
+    <div className="mt-8 flex w-full flex-col">
+      {profile ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-3 border-t border-foreground/15 pt-8">
+          <p className="max-w-xl text-sm leading-relaxed text-muted">
+            {money(profile.paycheque)} {frequencyLabel[profile.paychequeFrequency]}{" "}
+            paycheck · {money(profile.expenses)}{" "}
+            {frequencyLabel[profile.expensesFrequency]} bills ·{" "}
+            {money(profile.currentSavings)} cash
+          </p>
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={openSetup}
+              className="text-sm text-muted underline-offset-4 hover:underline"
+            >
+              Edit money
+            </button>
+            <button
+              type="button"
+              onClick={startOver}
+              className="text-sm text-muted underline-offset-4 hover:underline"
+            >
+              Start over
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <form onSubmit={onCheck} className="flex flex-col pt-8" noValidate>
+        <label className="grid gap-3">
+          <span className="text-muted">Price</span>
+          <input
+            ref={priceRef}
+            name="purchasePrice"
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            value={purchasePrice}
+            onChange={(event) => setPurchasePrice(event.target.value)}
+            placeholder="0"
+            className="border border-foreground bg-white px-4 py-4 font-[family-name:var(--font-mono)] text-4xl outline-none focus:bg-[#f7f7f7] sm:text-5xl"
+          />
+        </label>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Field
-            label="Desired purchase date"
+            label="Buy by"
             name="desiredPurchaseDate"
             type="date"
-            defaultValue="2026-10-15"
+            value={desiredPurchaseDate}
+            onChange={setDesiredPurchaseDate}
           />
-          <Select
-            label="Category"
-            name="purchaseCategory"
-            options={[
-              { value: "needs", label: "Needs" },
-              { value: "wants", label: "Wants" },
-              { value: "luxury", label: "Luxury" },
-            ]}
-            defaultValue="wants"
-          />
-        </section>
+        </div>
 
-        <section className="grid gap-4 sm:grid-cols-2">
-          <Field label="Paycheque amount" name="paycheque" type="number" defaultValue="1200" />
-          <Select
-            label="Pay frequency"
-            name="paychequeFrequency"
-            options={FREQUENCIES.map((f) => ({ value: f, label: f }))}
-            defaultValue="biweekly"
-          />
-          <Field label="Expenses" name="expenses" type="number" defaultValue="700" />
-          <Select
-            label="Expense frequency"
-            name="expensesFrequency"
-            options={FREQUENCIES.map((f) => ({ value: f, label: f }))}
-            defaultValue="biweekly"
-          />
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Current savings / cash"
-            name="currentSavings"
-            type="number"
-            defaultValue="1500"
-          />
-          <Field
-            label="Minimum buffer"
-            name="minimumBuffer"
-            type="number"
-            defaultValue="500"
-          />
-          <Field
-            label="Savings commitment"
-            name="savingsCommitment"
-            type="number"
-            defaultValue="100"
-          />
-          <Select
-            label="Savings frequency"
-            name="savingsCommitmentFrequency"
-            options={FREQUENCIES.map((f) => ({ value: f, label: f }))}
-            defaultValue="biweekly"
-          />
-        </section>
-
-        <div className="flex flex-wrap items-center gap-4 pt-2">
+        <div className="mt-6 flex flex-wrap items-center gap-4">
           <button
             type="submit"
             disabled={pending}
-            className="bg-accent px-6 py-3 font-[family-name:var(--font-display)] text-base font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+            className={`btn-check relative z-10 min-h-12 cursor-pointer touch-manipulation border border-foreground bg-foreground px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed ${
+              pending ? "is-pending" : ""
+            } ${settling ? "is-settling" : ""}`}
           >
             {pending ? "Checking…" : "Can I afford it?"}
           </button>
@@ -179,84 +405,254 @@ export function AffordabilityForm() {
 
       {result ? (
         <section
+          ref={analysisRef}
           key={`${result.decision}-${result.suggestedPurchaseDate}`}
-          className="animate-rise border-t border-line pt-8"
+          className="scroll-mt-20 pt-10 pb-10"
           aria-live="polite"
         >
-          <p className="text-sm uppercase tracking-[0.18em] text-muted">Verdict</p>
-          <h2
-            className={`mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight decision-${result.decision}`}
-          >
-            {decisionLabel[result.decision]}
-          </h2>
-          <p className="mt-3 max-w-xl text-muted">{result.reason}</p>
+          <div className="analysis-in relative border border-foreground bg-white p-8 sm:p-10">
+            <SketchMark
+              label="the answer"
+              side="right"
+              delayMs={200}
+              doodle="check"
+              className="sketch-on-mount"
+            />
+            <header className="flex items-baseline gap-4">
+              <span className="font-[family-name:var(--font-mono)] text-xs tracking-[0.18em] text-muted">
+                02
+              </span>
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                Analysis
+              </h2>
+            </header>
 
-          <div className="mt-8 border border-line p-4">
-            <p className="text-sm uppercase tracking-[0.18em] text-muted">
-              What-if snapshot
-            </p>
-            <p className="mt-2 text-sm text-muted">
-              {result.after.currentSavings === result.before.currentSavings
-                ? "Purchase fits in this paycheque’s FCF — cash unchanged."
-                : "Purchase dips into cash above FCF."}
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <dl className="grid gap-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                  Before
-                </p>
-                <Metric
-                  label="Current savings"
-                  value={money(result.before.currentSavings)}
-                />
-                <Metric
-                  label="Safe to spend"
-                  value={money(result.before.safeToSpend)}
-                />
-              </dl>
-              <dl className="grid gap-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                  After
-                </p>
-                <Metric
-                  label="Current savings"
-                  value={money(result.after.currentSavings)}
-                />
-                <Metric
-                  label="Safe to spend"
-                  value={money(result.after.safeToSpend)}
-                />
-              </dl>
-            </div>
+            <h2
+              className={`analysis-in analysis-delay-1 mt-8 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight decision-${result.decision} sm:text-5xl`}
+            >
+              {decisionLabel[result.decision]}
+            </h2>
+
+            {result.riskFactors.length > 0 ? (
+              <ul className="analysis-in analysis-delay-2 mt-8 grid max-w-xl gap-3">
+                {result.riskFactors.map((factor) => (
+                  <li
+                    key={factor}
+                    className="border-l-2 border-foreground pl-4 text-base leading-relaxed text-muted"
+                  >
+                    {factor}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {result.paychequesNeeded == null || result.paychequesNeeded > 0 ? (
+              <p className="analysis-in analysis-delay-2 mt-6 max-w-xl font-[family-name:var(--font-mono)] text-sm text-muted">
+                {timelineCopy(result)}
+              </p>
+            ) : null}
           </div>
 
-          <dl className="mt-8 grid gap-4 sm:grid-cols-2">
-            <Metric label="Safe to spend" value={money(result.safeToSpend)} />
-            <Metric
-              label="Free cash remaining after purchase"
-              value={money(result.remainingAfter)}
+          <div className="analysis-in analysis-delay-3 mt-4">
+            <WhatIfSnapshot
+              before={result.before}
+              after={result.after}
+              freeCashFlow={result.freeCashFlow}
+              desiredPurchaseDate={result.desiredPurchaseDate}
             />
-            <Metric
-              label="Free cash flow / paycheque"
-              value={money(result.freeCashFlow)}
-            />
-            <Metric
-              label="Paycheques needed"
-              value={
-                result.paychequesNeeded == null
-                  ? "Unreachable"
-                  : String(result.paychequesNeeded)
-              }
-            />
-            <Metric
-              label="Suggested purchase date"
-              value={new Date(result.suggestedPurchaseDate).toLocaleDateString()}
-            />
-            <Metric label="Paycheque impact" value={pct(result.paychequeImpact)} />
-            <Metric label="Total impact" value={pct(result.totalImpact)} />
-          </dl>
+          </div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function localDateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString();
+}
+
+function timelineCopy(result: EvaluateResult): string {
+  if (result.paychequesNeeded == null) {
+    return "Unreachable on current free cash flow.";
+  }
+
+  const n = result.paychequesNeeded;
+  const cheques = `${n} paycheque${n === 1 ? "" : "s"}`;
+  const earliest = localDateLabel(result.earliestAffordableDate);
+  const desired = localDateLabel(result.desiredPurchaseDate);
+
+  if (result.decision === "no") {
+    return `Earliest: ${earliest} · ${cheques}`;
+  }
+
+  if (earliest !== desired) {
+    return `Ready as early as ${earliest} · ${cheques} (you asked for ${desired})`;
+  }
+
+  return `Ready by ${earliest} · ${cheques}`;
+}
+
+function WhatIfSnapshot({
+  before,
+  after,
+  freeCashFlow,
+  desiredPurchaseDate,
+}: {
+  before: LedgerSnapshot;
+  after: LedgerSnapshot;
+  freeCashFlow: number;
+  desiredPurchaseDate: string;
+}) {
+  const cashDelta = after.currentSavings - before.currentSavings;
+  const maxCash = Math.max(
+    Math.abs(before.currentSavings),
+    Math.abs(after.currentSavings),
+    1,
+  );
+  const maxSafe = Math.max(
+    Math.abs(before.safeToSpend),
+    Math.abs(after.safeToSpend),
+    1,
+  );
+
+  const headline =
+    cashDelta === 0
+      ? "Your cash doesn’t move"
+      : cashDelta < 0
+        ? `Cash drops ${money(-cashDelta)}`
+        : `After the buy, cash is still up ${money(cashDelta)}`;
+
+  const badge =
+    cashDelta === 0
+      ? "No change"
+      : `${cashDelta < 0 ? "−" : "+"}${money(Math.abs(cashDelta))}`;
+
+  const buyDate = localDateLabel(desiredPurchaseDate);
+
+  return (
+    <aside className="bg-foreground text-white">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/20 px-6 py-5 sm:px-8">
+        <div>
+          <p className="font-[family-name:var(--font-mono)] text-xs tracking-[0.16em] text-white/55">
+            {`If you buy on ${buyDate}`}
+          </p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+            {headline}
+          </p>
+        </div>
+        <span className="border border-white/35 px-2.5 py-1 font-[family-name:var(--font-mono)] text-xs tracking-[0.12em]">
+          {badge}
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2">
+        <SnapshotColumn
+          label="Now"
+          cash={before.currentSavings}
+          safe={before.safeToSpend}
+          cashMax={maxCash}
+          safeMax={maxSafe}
+        />
+        <SnapshotColumn
+          label={`After ${buyDate}`}
+          cash={after.currentSavings}
+          safe={after.safeToSpend}
+          cashMax={maxCash}
+          safeMax={maxSafe}
+          dimmed={cashDelta !== 0}
+          last
+        />
+      </div>
+
+      <p className="border-t border-white/20 px-6 py-5 text-sm leading-relaxed text-white/70 sm:px-8">
+        {cashDelta === 0
+          ? `Fits in this paycheque’s free cash (${money(freeCashFlow)}). Savings stay put.`
+          : `Left column is what you entered. Right column is cash on ${buyDate} after income, expenses, and this purchase. Free cash per paycheque is ${money(freeCashFlow)}.`}
+      </p>
+    </aside>
+  );
+}
+
+function SnapshotColumn({
+  label,
+  cash,
+  safe,
+  cashMax,
+  safeMax,
+  dimmed = false,
+  last = false,
+}: {
+  label: string;
+  cash: number;
+  safe: number;
+  cashMax: number;
+  safeMax: number;
+  dimmed?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={`px-6 py-6 sm:px-8 ${last ? "border-t border-white/20 sm:border-t-0 sm:border-l" : ""}`}
+    >
+      <p className="font-[family-name:var(--font-mono)] text-xs tracking-[0.16em] text-white/55">
+        {label}
+      </p>
+      <SnapshotMeter
+        caption="Cash"
+        amount={cash}
+        max={cashMax}
+        dimmed={dimmed}
+      />
+      <SnapshotMeter
+        caption="Safe to spend"
+        amount={safe}
+        max={safeMax}
+        dimmed={dimmed}
+      />
+    </div>
+  );
+}
+
+function SnapshotMeter({
+  caption,
+  amount,
+  max,
+  dimmed,
+}: {
+  caption: string;
+  amount: number;
+  max: number;
+  dimmed: boolean;
+}) {
+  const target = `${(Math.abs(amount) / max) * 100}%`;
+  const [grown, setGrown] = useState(false);
+
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setGrown(true);
+      return;
+    }
+    const id = window.setTimeout(() => setGrown(true), 280);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm text-white/55">{caption}</span>
+        <span className="font-[family-name:var(--font-mono)] text-xl">
+          {money(amount)}
+        </span>
+      </div>
+      <div className="mt-2 h-2 bg-white/15">
+        <div
+          className={`meter-fill h-full ${dimmed ? "bg-white/45" : "bg-white"} ${
+            grown ? "is-grown" : ""
+          }`}
+          style={{ width: grown ? target : "0%" }}
+        />
+      </div>
     </div>
   );
 }
@@ -265,24 +661,28 @@ function Field({
   label,
   name,
   type,
-  defaultValue,
+  value,
+  onChange,
+  className,
 }: {
   label: string;
   name: string;
   type: string;
-  defaultValue?: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm">
+    <label className={`grid gap-2 text-sm ${className ?? ""}`}>
       <span className="text-muted">{label}</span>
       <input
         name={name}
         type={type}
-        required
         min={type === "number" ? 0 : undefined}
         step={type === "number" ? "any" : undefined}
-        defaultValue={defaultValue}
-        className="border border-line bg-surface px-3 py-2.5 outline-none transition focus:border-accent"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="border border-foreground bg-white px-3 py-2.5 font-[family-name:var(--font-mono)] text-base outline-none focus:bg-[#f7f7f7]"
       />
     </label>
   );
@@ -292,21 +692,23 @@ function Select({
   label,
   name,
   options,
-  defaultValue,
+  value,
+  onChange,
 }: {
   label: string;
   name: string;
   options: { value: string; label: string }[];
-  defaultValue?: string;
+  value: string;
+  onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm">
+    <label className="grid gap-2 text-sm">
       <span className="text-muted">{label}</span>
       <select
         name={name}
-        required
-        defaultValue={defaultValue}
-        className="border border-line bg-surface px-3 py-2.5 outline-none transition focus:border-accent"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="border border-foreground bg-white px-3 py-2.5 text-base outline-none focus:bg-[#f7f7f7]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -315,16 +717,5 @@ function Select({
         ))}
       </select>
     </label>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border-l border-line pl-3">
-      <dt className="text-xs uppercase tracking-[0.14em] text-muted">{label}</dt>
-      <dd className="mt-1 font-[family-name:var(--font-display)] text-xl font-medium">
-        {value}
-      </dd>
-    </div>
   );
 }
